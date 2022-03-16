@@ -1,0 +1,26 @@
+{
+  "name": "com.gamewarriors.vendorsystem",
+  "version": "0.1.0",
+  "displayName": "Vendor System",
+  "description": "This package provide base structure for vendor requiermrnt such as rating, in app purchase , open store link, support purchase off and currency data item",
+  "unity": "2019.1",
+  "unityRelease": "0b5",
+  "dependencies": {
+  },
+  "keywords": [
+    "Vendor",
+    "Market",
+    "InAppPurchase",
+    "Bazaar",
+    "GooglePlay",
+    "RateApp",
+    "AppStore",
+    "Apple",
+    "Unity3d"
+  ],
+  "author": {
+    "name": "Game Warriors",
+    "email": "mahdifada.eddini@outlook.com",
+    "url": "https://www.gamewarriorsstudio.com"
+  }
+}
