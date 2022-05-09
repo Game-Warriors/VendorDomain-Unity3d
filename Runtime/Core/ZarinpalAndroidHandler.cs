@@ -9,8 +9,6 @@ using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Data;
 
 #if GOOGLE
-using Google.Play.Common;
-using Google.Play.Review;
 namespace GameWarriors.VendorDomian.Core
 {
     public class ZarinpalAndroidHandler : MonoBehaviour, IMarketHandler
@@ -58,20 +56,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RateUs(Action<bool> rateDone)
         {
-            ReviewManager reviewManager = new ReviewManager();
-            Google.Play.Common.PlayAsyncOperation<PlayReviewInfo, ReviewErrorCode> requestFlowOperation = reviewManager.RequestReviewFlow();
-            requestFlowOperation.Completed += (operation) =>
-            {
-                PlayReviewInfo playReviewInfo = requestFlowOperation.GetResult();
-
-                PlayAsyncOperation<VoidResult, ReviewErrorCode> launchFlowOperation = reviewManager.LaunchReviewFlow(playReviewInfo);
-
-                launchFlowOperation.Completed += (input) =>
-                {
-                    rateDone?.Invoke(launchFlowOperation.Error == ReviewErrorCode.NoError);
-                };
-            };
-            //Application.OpenURL("market://details?id=" + Application.identifier);
+            Application.OpenURL("market://details?id=" + Application.identifier);
         }
 
         public void OnStoreInitialized(string data)
