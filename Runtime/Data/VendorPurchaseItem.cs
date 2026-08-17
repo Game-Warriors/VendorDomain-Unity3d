@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Enums;
+using System;
 using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Data
@@ -17,7 +18,7 @@ namespace GameWarriors.VendorDomian.Data
         [SerializeField]
         private VendorCurrencyItem[] _itemsData;
         [SerializeField]
-        private ProductType _type;
+        private EProductType _type;
         [SerializeField]
         private int _purchaseLimit;
         [SerializeField]
@@ -30,7 +31,7 @@ namespace GameWarriors.VendorDomian.Data
         public string OffProductId => _offProductId;
         public float Price => _price;
         public VendorCurrencyItem[] CurrenciesData => _itemsData;
-        public ProductType Type => _type;
+        public EProductType Type => _type;
         public int ItemCounts => _itemsData?.Length ?? 0;
         public bool HasOff => _hasOff;
         public int PurchaseLimit => _purchaseLimit;

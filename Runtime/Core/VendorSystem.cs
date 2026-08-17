@@ -43,7 +43,7 @@ namespace GameWarriors.VendorDomian.Core
             VendorPurchaseItem product = _marketHandler.GetProductByName(selectedId);
             //Debug.Log("try to buy pack id :" + packName);
             //Debug.Log("try to buy product id :" + product.ProductId);
-            if (product.Type == ProductType.Consumable)
+            if (product.Type == EProductType.Consumable)
             {
                 string productId = hasOff && product.HasOff ? product.OffProductId : product.ProductId;
                 //Debug.Log("try to buy product id :" + productId);

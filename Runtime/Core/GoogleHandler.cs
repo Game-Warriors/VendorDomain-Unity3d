@@ -1,24 +1,24 @@
-﻿using System;
-using UnityEngine;
+﻿using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Data;
-using GameWarriors.VendorDomian.Abstraction;
+using System;
+using UnityEngine;
 
 #if GOOGLE
 namespace GameWarriors.VendorDomian.Core
 {
     using System.Collections.Generic;
     using UnityEngine.Purchasing;
+    using static UnityEditor.ObjectChangeEventStream;
 
 
-    public class GoogleHandler : IMarketHandler, IStoreListener
+    public class GoogleHandler : IMarketHandler
     {
         // Apple App Store-specific product identifier for the subscription product.
         private const string kProductNameAppleSubscription = "com.unity3d.subscription.new";
         // Google Play Store-specific product identifier subscription product.
         private const string kProductNameGooglePlaySubscription = "com.unity3d.subscription.original";
 
-        private IStoreController _controller;
-        private IExtensionProvider _extensions;
+        private StoreController _storeController;
 
         private IVendorEventHandler _vendorEventHandler;
         private Dictionary<string, VendorPurchaseItem> _productsTable;
@@ -38,22 +38,101 @@ namespace GameWarriors.VendorDomian.Core
             return;
         }
 
-        public void Initialization(IServiceProvider serviceProvider)
+        public async void Initialization(IServiceProvider serviceProvider)
         {
-            IVendorEventHandler vendorEventHandler = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler; 
+            IVendorEventHandler vendorEventHandler = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
             IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
             VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("GoogleVendorConfig");
             if (resource == null)
                 return;
             _productsTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
             resource.FillItemDic(_productsTable);
-            ConfigurationBuilder builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance(AppStore.GooglePlay));
+            _storeController = UnityIAPServices.StoreController();
+
+            _storeController.OnPurchasePending += OnPurchasePending;
+            _storeController.OnPurchasesFetched += OnPurchasesFetched;
+            _storeController.OnPurchaseFailed += OnPurchaseFailed;
+            _storeController.OnProductsFetched += OnProductsFetched;
+            _storeController.OnStoreConnected += StoreConnected;
+
+            try
+            {
+                await _storeController.Connect();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("IAP connection failed: " + e);
+                _vendorEventHandler.OnStoreInitializeFailed();
+                return;
+            }
+
+
+            _vendorEventHandler = vendorEventHandler;
+        }
+
+        private void OnProductsFetched(List<Product> products)
+        {
+            Debug.Log("Products fetched: " + products.Count);
+
+            _storeController.FetchPurchases();
+        }
+
+        private void OnPurchasePending(PendingOrder order)
+        {
+            Debug.Log("Purchase pending");
+
+            foreach (var item in order.CartOrdered.Items())
+            {
+                Product product = item.Product;
+
+                _vendorEventHandler.PurchasedSuccessful(GetProductNameById(product.definition.id), product.metadata.isoCurrencyCode, (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, order.Info.TransactionID);
+            }
+
+            // IMPORTANT:
+            // Tell the store that the purchase has been processed.
+            _storeController.ConfirmPurchase(order);
+        }
+
+        private void OnPurchasesFetched(Orders orders)
+        {
+            Debug.Log("Purchases fetched");
+
+            foreach (var order in orders.ConfirmedOrders)
+            {
+                foreach (var item in order.CartOrdered.Items())
+                {
+                    Product product = item.Product;
+
+                    if (product.type == ProductType.Subscription)
+                    {
+                        SubscriptionInfo subscriptionInfo =
+                new SubscriptionInfo(product);
+
+                        var subscribed = subscriptionInfo.IsSubscribed();
+                        var expired = subscriptionInfo.IsExpired();
+                        var cancelled = subscriptionInfo.IsCancelled();
+                        var autoRenewing = subscriptionInfo.IsAutoRenewing();
+
+                        Debug.Log($"Subscribed: {subscribed}");
+                        Debug.Log($"Expired: {expired}");
+                        Debug.Log($"Cancelled: {cancelled}");
+                        Debug.Log($"Auto renewing: {autoRenewing}");
+                        Debug.Log($"Expires: {subscriptionInfo.GetExpireDate()}");
+                        _vendorEventHandler.OnSubscriptionUpdate(product)
+                    }
+                }
+            }
+        }
+
+        private void StoreConnected()
+        {
+            var products = new List<ProductDefinition>();
             foreach (var item in _productsTable.Values)
             {
-                builder.AddProduct(item.ProductId, ProductType.Consumable);
+                products.Add(new ProductDefinition(item.ProductId, (ProductType)item.Type));
             }
-            _vendorEventHandler = vendorEventHandler;
-            UnityPurchasing.Initialize(this, builder);
+
+            _storeController.FetchProducts(products);
         }
 
         public void RefreshPruchases(string sku)
@@ -124,12 +203,6 @@ namespace GameWarriors.VendorDomian.Core
             _vendorEventHandler.OnPurchaseItemUpdate(IterateOverPurchaseItem());
         }
 
-        public void OnInitializeFailed(InitializationFailureReason error)
-        {
-            //Debug.LogError("Google IAP Failed : " + error.ToString());
-            _vendorEventHandler.OnStoreInitializeFailed();
-        }
-
         public void OnPurchaseFailed(Product i, PurchaseFailureReason p)
         {
             //Debug.Log(p);
@@ -140,52 +213,6 @@ namespace GameWarriors.VendorDomian.Core
             else
             {
                 _vendorEventHandler.OnError(0, $"Google Purchase Failed Item:{i.definition.id} : " + p.ToString());
-            }
-        }
-
-        public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs args)
-        {
-            var product = args.purchasedProduct;
-            //Debug.Log(args.purchasedProduct);
-            //Debug.Log(args.purchasedProduct.definition.id);
-            // A consumable product has been purchased by this user.
-            if (product.definition.type == ProductType.Consumable)
-            {
-                Debug.Log(string.Format("ProcessPurchase: PASS. Product: '{0}'", product.definition.id));
-                string productId = product.definition.id;
-                _vendorEventHandler.PurchasedSuccessful(GetProductNameById(productId), args.purchasedProduct.metadata.isoCurrencyCode, (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, product.transactionID);
-            }
-            // Or ... a non-consumable product has been purchased by this user.
-            else if (product.definition.type == ProductType.NonConsumable)
-            {
-                Debug.Log(string.Format("ProcessPurchase: PASS. Product: '{0}'", args.purchasedProduct.definition.id));
-                // TODO: The non-consumable item has been successfully purchased, grant this item to the player.
-            }
-            // Or ... a subscription product has been purchased by this user.
-            else if (product.definition.type == ProductType.Subscription)
-            {
-                Debug.Log(string.Format("ProcessPurchase: PASS. Product: '{0}'", args.purchasedProduct.definition.id));
-                // TODO: The subscription item has been successfully purchased, grant this to the player.
-            }
-            // Or ... an unknown product has been purchased by this user. Fill in additional products here....
-            else
-            {
-                Debug.Log(string.Format("ProcessPurchase: FAIL. Unrecognized product: '{0}'", args.purchasedProduct.definition.id));
-            }
-
-            // Return a flag indicating whether this product has completely been received, or if the application needs 
-            // to be reminded of this purchase at next app launch. Use PurchaseProcessingResult.Pending when still 
-            // saving purchased products to the cloud, and when that save is delayed. 
-            Debug.Log("PurchaseProcessingResult.Complete");
-            return PurchaseProcessingResult.Complete;
-        }
-
-
-        public void SetProductId(string name, string newId)
-        {
-            if (_productsTable.TryGetValue(name, out var item))
-            {
-                item.SetId(newId);
             }
         }
 
