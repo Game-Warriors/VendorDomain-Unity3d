@@ -3,7 +3,7 @@ using GameWarriors.VendorDomian.Enums;
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
-    public interface IVendorEventHandler
+    public interface IVendorEventListener
     {
         void OnVendorStateChanged(string id, EStoreSetupState setupState);
         void PurchasedFailed(string id, VendorPurchaseItem purchaseItem, int state, string error);

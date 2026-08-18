@@ -1,36 +1,65 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Constants;
+using GameWarriors.VendorDomian.Data;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading.Tasks;
 using UnityEngine;
-using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
+using UnityEngine.Purchasing;
 
 
 namespace GameWarriors.VendorDomian.Core
 {
     public class WindowsHandler : IMarketHandler
     {
-        private IVendorEventHandler _vendroEvent;
+        private IVendorEventListener _vendorEvent;
         private IPaymentServer _paymentServer;
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
-        private Dictionary<string, VendorPurchaseItem> _productsTable;
+        private Dictionary<string, VendorPurchaseItem> _productsNameTable;
 
-        public string Id => "Windows";
-        public string MarketPackageName => "";
+        public string Id => MarketId.WINDOWS;
+        public string MarketPackageName => string.Empty;
 
-        public string VendorLink => "";
+        public string VendorLink => string.Empty;
 
-        public int UnconsumePurchaseCount => _unconsumePurchases?.Count ?? 0;
+        public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
 
         public bool HasValidation => false;
 
-        public EVendorType VendorType => EVendorType.Windows;
+        public bool IsInitialized { get; private set; }
+
+        public WindowsHandler(IVendorEventListener vendorEvent, IVendorResourceLoader resourceLoader, IPaymentServer paymentServer)
+        {
+            _vendorEvent = vendorEvent;
+            _paymentServer = paymentServer;
+            resourceLoader.LoadAsync(Id, OnLoadDone);
+        }
+
+        private async void OnLoadDone(VendorConfigurationObject resource)
+        {
+            if (resource == null)
+            {
+                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                throw new ArgumentNullException($"the resource for market id {Id} in null");
+            }
+            _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
+
+            int length = resource.ItemCounts;
+            for (int i = 0; i < length; ++i)
+            {
+                VendorPurchaseItem product = resource.Products[i];
+                _productsNameTable.Add(product.Name, product);
+            }
+        }
 
         public void Dispose()
         {
 
         }
+
 
         public async void FetchUnconsumePurchases()
         {
@@ -45,14 +74,13 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     _unconsumePurchases.Push(items[i]);
                 }
-                if (length > 0)
-                    _vendroEvent.UpdatePurchaseItems(IterateOverPurchaseItem());
+
             }
         }
 
         public VendorPurchaseItem GetProductNameById(string productId)
         {
-            foreach (var item in _productsTable.Values)
+            foreach (var item in _productsNameTable.Values)
             {
                 if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
                     return item;
@@ -62,23 +90,26 @@ namespace GameWarriors.VendorDomian.Core
 
         public VendorPurchaseItem GetProductByName(string id)
         {
-            return _productsTable[id];
+            return _productsNameTable[id];
         }
 
         public void Initialization(IServiceProvider serviceProvider)
         {
-            IVendorEventHandler vendorEvent = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
-            IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
-            _vendroEvent = vendorEvent;
-            _paymentServer = paymentServer;
-            VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("ZarinpalVendorConfig");
-            if (resource == null)
-                return;
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
-            _productsTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
-            resource.FillItemDic(_productsTable);
         }
 
+        public async Task Loading()
+        {
+            while (_productsNameTable == null)
+            {
+                await Task.Delay(100);
+            }
+        }
+
+        public IEnumerable LoadingEnumerable()
+        {
+            yield return new WaitUntil(() => _productsNameTable != null);
+        }
 
         public void OpenPage()
         {
@@ -104,14 +135,15 @@ namespace GameWarriors.VendorDomian.Core
             if (_unconsumePurchases.Count > 0)
             {
                 UnconsumePurchase item = _unconsumePurchases.Pop();
+                VendorPurchaseItem product = GetProductNameById(item.ItemId);
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
-                    _vendroEvent.PurchasedSuccessful(GetProductNameById(item.ItemId), "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken);
+                    _vendorEvent.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken, default);
                 else
-                    _vendroEvent.ConsumeFailed(item.ItemId, item.PurchaseToken);
+                    _vendorEvent.ConsumeFailed(Id, product, item.PurchaseToken, default);
             }
             else
-                _vendroEvent.ConsumeFailed(string.Empty, string.Empty);
+                _vendorEvent.ConsumeFailed(Id, default, string.Empty, string.Empty);
         }
 
         public void SetProductId(string name, string newId)
@@ -126,20 +158,20 @@ namespace GameWarriors.VendorDomian.Core
             //backend.SendDataAsync("",new System.Threading.CancellationToken(),new RequestPurhcaseBindingModel(,sku)
             //Application.OpenURL();
             //_billingService.UserCancelPurchase(payload);
-            _vendroEvent.PurchasedSuccessful(GetProductNameById(sku), "IIR", DateTime.UtcNow.ToBinary(), UnityEngine.Random.Range(1000000, 9000000).ToString());
+            _vendorEvent.PurchasedSuccessful(Id, GetProductNameById(sku), "IIR", DateTime.UtcNow.ToBinary(), UnityEngine.Random.Range(1000000, 9000000).ToString(), string.Empty);
         }
         public void SetProdcutSalesOffState(string itemName, bool offState)
         {
-            if (_productsTable.ContainsKey(itemName))
+            if (_productsNameTable.ContainsKey(itemName))
             {
-                var item = _productsTable[itemName];
+                var item = _productsNameTable[itemName];
                 item.SetOffState(offState);
             }
         }
 
         public void SetAllProdcutSalesOffState(bool state)
         {
-            foreach (var item in _productsTable.Values)
+            foreach (var item in _productsNameTable.Values)
             {
                 item.SetOffState(state);
             }
@@ -148,11 +180,12 @@ namespace GameWarriors.VendorDomian.Core
 
         private IEnumerable<VendorPurchaseItem> IterateOverPurchaseItem()
         {
-            foreach (VendorPurchaseItem item in _productsTable.Values)
+            foreach (VendorPurchaseItem item in _productsNameTable.Values)
             {
                 yield return item;
             }
         }
+
 
     }
 }

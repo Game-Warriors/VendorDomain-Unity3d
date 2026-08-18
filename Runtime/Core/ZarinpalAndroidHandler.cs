@@ -1,12 +1,14 @@
 ﻿
+using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Constants;
+using GameWarriors.VendorDomian.Data;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
-using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
 
 #if GOOGLE
 namespace GameWarriors.VendorDomian.Core
@@ -14,9 +16,9 @@ namespace GameWarriors.VendorDomian.Core
     public class ZarinpalAndroidHandler : MonoBehaviour, IMarketHandler
     {
         private AndroidJavaClass _zarinpalActivity;
-        private IBillingService _billingService;
+        private IVendorEventListener _eventListener;
         private IPaymentServer _paymentServer;
-        private Dictionary<string, VendorPurchaseItem> _productsTable;
+        private Dictionary<string, VendorPurchaseItem> _productsNameTable;
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
 
@@ -24,29 +26,56 @@ namespace GameWarriors.VendorDomian.Core
         public string PriceUnit => "T";
         public bool IsInitialized => true;
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
-        public string Id => "ZarinpalAndroid";
-        public int UnconsumePurchaseCount => _unconsumePurchases?.Count ?? 0;
-
-        public EVendorType VendorType => EVendorType.Google;
+        public string Id => MarketId.ZARINPAL;
+        public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
 
         public bool HasValidation => false;
 
+        public ZarinpalAndroidHandler(IVendorEventListener vendorEvent, IVendorResourceLoader resourceLoader, IPaymentServer paymentServer)
+        {
+            _eventListener = vendorEvent;
+            _paymentServer = paymentServer;
+            resourceLoader.LoadAsync(Id, OnLoadDone);
+        }
+
+        private async void OnLoadDone(VendorConfigurationObject resource)
+        {
+            if (resource == null)
+            {
+                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                throw new ArgumentNullException($"the resource for market id {Id} in null");
+            }
+            _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
+
+            int length = resource.ItemCounts;
+            for (int i = 0; i < length; ++i)
+            {
+                VendorPurchaseItem product = resource.Products[i];
+                _productsNameTable.Add(product.Name, product);
+            }
+        }
+
         public void Initialization(IServiceProvider serviceProvider)
         {
-            IVendorEventHandler vendorEvent = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
-            IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
-            VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("ZarinpalVendorConfig");
-            if (resource == null)
-                return;
-            _productsTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
-            resource.FillItemDic(_productsTable);
 #if DEVELOPMENT
             Debug.Log("Zarinpal Initialized");
 #endif
             _zarinpalActivity = new AndroidJavaClass("com.Ario.zarinpal.ZarinpalActivity");
-            _zarinpalActivity.CallStatic("initialize", paymentServer.RequestPayUrl, Application.identifier, "clc", "paymentresult");
+            _zarinpalActivity.CallStatic("initialize", _paymentServer.RequestPayUrl, Application.identifier, "clc", "paymentresult");
+        }
 
+        public async Task Loading()
+        {
+            while (_productsNameTable == null)
+            {
+                await Task.Delay(100);
+            }
+        }
+
+        public IEnumerable LoadingEnumerable()
+        {
+            yield return new WaitUntil(() => _productsNameTable != null);
         }
 
         public void OpenPage()
@@ -82,7 +111,6 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     _unconsumePurchases.Push(items[i]);
                 }
-                _billingService.UpdateMarketData();
             }
         }
 
@@ -95,11 +123,12 @@ namespace GameWarriors.VendorDomian.Core
             if (_unconsumePurchases.Count > 0)
             {
                 UnconsumePurchase item = _unconsumePurchases.Pop();
+                VendorPurchaseItem product = GetProductNameById(item.ItemId);
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
-                    _billingService.PurchasedSuccessful(GetProductNameById(item.ItemId), "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken);
+                    _eventListener.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken, default);
                 else
-                    _billingService.ConsumeFailed(item.ItemId, item.PurchaseToken);
+                    _eventListener.ConsumeFailed(Id, product, item.ItemId, item.PurchaseToken);
             }
         }
 
@@ -139,19 +168,9 @@ namespace GameWarriors.VendorDomian.Core
             Debug.Log("Dispose");
         }
 
-        public void SetProductId(string name, string newId)
-        {
-            if (_productsTable.ContainsKey(name))
-            {
-                var item = _productsTable[name];
-                item.SetId(newId);
-                _productsTable[name] = item;
-            }
-        }
-
         public VendorPurchaseItem GetProductByName(string id)
         {
-            if (_productsTable.TryGetValue(id, out var item))
+            if (_productsNameTable.TryGetValue(id, out var item))
             {
                 return item;
             }
@@ -160,7 +179,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public VendorPurchaseItem GetProductNameById(string productId)
         {
-            foreach (var item in _productsTable.Values)
+            foreach (var item in _productsNameTable.Values)
             {
                 if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
                     return item;
@@ -178,13 +197,13 @@ namespace GameWarriors.VendorDomian.Core
 #if DEVELOPMENT
             Debug.Log("Success Purhcase:" + data);
 #endif
-            ZarinSuccessPurchase purhcase = JsonUtility.FromJson<ZarinSuccessPurchase>(data);
-
-            HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, purhcase.Authority, EMarketProvider.Zarinpal);
+            ZarinSuccessPurchase purchase = JsonUtility.FromJson<ZarinSuccessPurchase>(data);
+            VendorPurchaseItem product = GetProductNameById(purchase.Sku);
+            HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, purchase.Authority, EMarketProvider.Zarinpal);
             if (httpStatus == HttpStatusCode.OK)
-                _billingService.PurchasedSuccessful(GetProductNameById(purhcase.Sku), "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, purhcase.Authority);
+                _eventListener.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, purchase.Authority, default);
             else
-                _billingService.ConsumeFailed(purhcase.Sku, purhcase.Authority);
+                _eventListener.ConsumeFailed(Id, product, purchase.Sku, purchase.Authority);
         }
 
         private void OnPurchaseCancel(string sku)
@@ -195,7 +214,8 @@ namespace GameWarriors.VendorDomian.Core
                 Debug.Log("OnPurchaseCancel sku: " + sku);
 #endif
             }
-            _billingService.UserCancelPurchase("Zarrinpal purhcase cancel sku : " + sku);
+            VendorPurchaseItem product = GetProductNameById(sku);
+            _eventListener.UserCancelPurchase(Id, product, "Zarrinpal purhcase cancel sku : " + sku);
         }
 
         private void OnPurchaseFailed(string message)
@@ -204,31 +224,32 @@ namespace GameWarriors.VendorDomian.Core
             {
 
             }
-            _billingService.OnError(0, "Purchase failed : " + message);
+            _eventListener.OnError(Id, 0, "Purchase failed : " + message);
         }
 
         private void PaymentRequestError(string errorMessage)
         {
-            _billingService.OnError(20, errorMessage);
+            _eventListener.OnError(Id, 20, errorMessage);
         }
 
         private void OnStartPurchaseCancel(string sku)
         {
-            _billingService.UserCancelPurchase("Zarrinpal Start purhcase cancle Sku: " + sku);
+            VendorPurchaseItem product = GetProductNameById(sku);
+            _eventListener.UserCancelPurchase(Id, product, "Zarrinpal Start purhcase cancel Sku: " + sku);
         }
 
         public void SetProdcutSalesOffState(string itemName, bool offState)
         {
-            if (_productsTable.ContainsKey(itemName))
+            if (_productsNameTable.ContainsKey(itemName))
             {
-                var item = _productsTable[itemName];
+                var item = _productsNameTable[itemName];
                 item.SetOffState(offState);
             }
         }
 
         public void SetAllProdcutSalesOffState(bool state)
         {
-            foreach (var item in _productsTable.Values)
+            foreach (var item in _productsNameTable.Values)
             {
                 item.SetOffState(state);
             }

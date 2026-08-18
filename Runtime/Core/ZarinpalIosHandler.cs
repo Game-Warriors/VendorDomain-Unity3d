@@ -18,7 +18,7 @@ namespace GameWarriors.VendorDomian.Core
         [DllImport("__Internal")]
         static extern void _initialize(string payRequestUrl, string appId, string scheme, string host);
 
-        private IVendorEventHandler _vendorEvent;
+        private IVendorEventListener _vendorEvent;
         private IPaymentServer _paymentServer;
 
         public string Id => "ZarinpaliOS";
@@ -28,7 +28,6 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool HasValidation => false;
 
-        public EVendorType VendorType => EVendorType.Apple;
 
         private Dictionary<string, VendorPurchaseItem> _productsTable;
         private Stack<UnconsumePurchase> _unconsumePurchases;
@@ -36,7 +35,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public void Initialization(IServiceProvider serviceProvider)
         {
-            IVendorEventHandler vendorEvent = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
+            IVendorEventListener vendorEvent = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
 
             VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("ZarinpalVendorConfig");

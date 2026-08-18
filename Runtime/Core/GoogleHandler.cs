@@ -7,6 +7,7 @@ using UnityEngine;
 namespace GameWarriors.VendorDomian.Core
 {
     using GameWarriors.VendorDomian.Constants;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Threading.Tasks;
     using UnityEngine.Purchasing;
@@ -20,7 +21,7 @@ namespace GameWarriors.VendorDomian.Core
         private const string kProductNameGooglePlaySubscription = "com.unity3d.subscription.original";
         private StoreController _storeController;
 
-        private IVendorEventHandler _vendorEventHandler;
+        private IVendorEventListener _vendorEventListener;
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
         private Dictionary<string, VendorPurchaseItem> _productsSkuTable;
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
@@ -45,34 +46,60 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool IsInitialized { get; private set; }
 
+        public GoogleHandler(IVendorResourceLoader resourceLoader, IVendorEventListener vendorEventListener)
+        {
+            _vendorEventListener = vendorEventListener;
+            resourceLoader.LoadAsync(Id, OnLoadDone);
+        }
+
         public void Dispose()
         {
             return;
         }
 
-        public async void Initialization(IVendorResourceLoader resourceLoader, IServiceProvider serviceProvider)
+        public async Task Loading()
         {
-            IVendorEventHandler vendorEventHandler = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
-            _vendorEventHandler = vendorEventHandler;
-            IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
-            _storeController = UnityIAPServices.StoreController();
+            while (_productsNameTable == null)
+            {
+                await Task.Delay(100);
+            }
+        }
 
+        public IEnumerable LoadingEnumerable()
+        {
+            yield return new WaitUntil(() => _productsNameTable != null);
+        }
+
+        public async void Initialization(IServiceProvider serviceProvider)
+        {
+            _storeController = UnityIAPServices.StoreController();
             _storeController.OnPurchasePending += OnPurchasePending;
             _storeController.OnPurchasesFetched += OnPurchasesFetched;
             _storeController.OnPurchaseFailed += OnPurchaseFailed;
             _storeController.OnProductsFetched += OnProductsFetched;
             _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
             _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
-
             _storeController.OnStoreConnected += StoreConnected;
-
             //_storeController.ProcessPendingOrdersOnPurchasesFetched
-            Task connectTask = _storeController.Connect();
-            resourceLoader.LoadAsync(Id, resource => OnLoadDone(resource, connectTask));
+            try
+            {
+                await _storeController.Connect();
+            }
+            catch (Exception e)
+            {
+                _vendorEventListener.StoreInitializeFailed(Id, e.ToString());
+                return;
+            }
         }
 
-        private async void OnLoadDone(VendorConfigurationObject resource, Task connectTask)
+        private async void OnLoadDone(VendorConfigurationObject resource)
         {
+            if (resource == null)
+            {
+                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                _productsSkuTable = new Dictionary<string, VendorPurchaseItem>();
+                throw new ArgumentNullException($"the resource for market id {Id} in null");
+            }
             _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
             _productsSkuTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
             int length = resource.ItemCounts;
@@ -81,15 +108,6 @@ namespace GameWarriors.VendorDomian.Core
                 VendorPurchaseItem product = resource.Products[i];
                 _productsNameTable.Add(product.Name, product);
                 _productsSkuTable.Add(product.ProductId, product);
-            }
-            try
-            {
-                await connectTask;
-            }
-            catch (Exception e)
-            {
-                _vendorEventHandler.StoreInitializeFailed(e.ToString());
-                return;
             }
         }
 
@@ -101,7 +119,7 @@ namespace GameWarriors.VendorDomian.Core
                 if (!string.IsNullOrEmpty(product.definition.id))
                 {
                     VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
-                    _vendorEventHandler.ConsumeFailed(purchaseItem, order.Info.Receipt, order.Info.TransactionID);
+                    _vendorEventListener.ConsumeFailed(Id, purchaseItem, order.Info.Receipt, order.Info.TransactionID);
                 }
             }
         }
@@ -114,7 +132,7 @@ namespace GameWarriors.VendorDomian.Core
                 if (!string.IsNullOrEmpty(product.definition.id))
                 {
                     VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
-                    _vendorEventHandler.ConsumeSuccess(purchaseItem, order.Info.Receipt, order.Info.TransactionID);
+                    _vendorEventListener.ConsumeSuccess(Id, purchaseItem, order.Info.Receipt, order.Info.TransactionID);
                 }
             }
         }
@@ -128,8 +146,8 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
                     if (order.FailureReason == PurchaseFailureReason.UserCancelled)
-                        _vendorEventHandler.UserCancelPurchase(purchaseItem, order.Details);
-                    _vendorEventHandler.PurchasedFailed(purchaseItem, (int)order.FailureReason, order.Details);
+                        _vendorEventListener.UserCancelPurchase(Id, purchaseItem, order.Details);
+                    _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)order.FailureReason, order.Details);
                 }
             }
         }
@@ -145,7 +163,7 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
 
-            _vendorEventHandler.OnPurchaseItemsUpdate();
+            _vendorEventListener.OnPurchaseItemsUpdate(Id);
             _storeController.FetchPurchases();
         }
 
@@ -155,7 +173,7 @@ namespace GameWarriors.VendorDomian.Core
             {
                 Product product = item.Product;
                 VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
-                _vendorEventHandler.PurchasedSuccessful(purchaseItem, product.metadata.isoCurrencyCode,
+                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
                     (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, order.Info.Receipt, order.Info.TransactionID);
             }
 
@@ -177,7 +195,7 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
 
-            _vendorEventHandler.OnSubscriptionUpdate();
+            _vendorEventListener.OnSubscriptionUpdate(Id);
         }
 
         private void StoreConnected()
@@ -223,7 +241,7 @@ namespace GameWarriors.VendorDomian.Core
             VendorPurchaseItem purchaseItem = GetProductNameById(sku);
             if (_storeController == null || !IsInitialized)
             {
-                _vendorEventHandler.PurchasedFailed(purchaseItem, 0, "store not initializaed");
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem, 0, "store not initializaed");
                 return;
             }
 
@@ -231,29 +249,17 @@ namespace GameWarriors.VendorDomian.Core
 
             if (product == null)
             {
-                _vendorEventHandler.PurchasedFailed(purchaseItem, (int)PurchaseFailureReason.NotSupported, "product not found");
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)PurchaseFailureReason.NotSupported, "product not found");
                 return;
             }
 
             if (!product.availableToPurchase)
             {
-                _vendorEventHandler.PurchasedFailed(purchaseItem, (int)PurchaseFailureReason.ProductUnavailable, "product not available");
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)PurchaseFailureReason.ProductUnavailable, "product not available");
                 return;
             }
 
             _storeController.PurchaseProduct(sku);
-        }
-
-        public void OnPurchaseFailed(Product i, PurchaseFailureReason p)
-        {
-            if (p == PurchaseFailureReason.UserCancelled)
-            {
-                _vendorEventHandler.UserCancelPurchase("User Cancel");
-            }
-            else
-            {
-                _vendorEventHandler.OnError(0, $"Google Purchase Failed Item:{i.definition.id} : " + p.ToString());
-            }
         }
 
         public VendorPurchaseItem GetProductByName(string id)

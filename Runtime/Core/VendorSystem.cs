@@ -1,108 +1,125 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Data;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
-using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
-using GameWarriors.VendorDomian.Enums;
 
 namespace GameWarriors.VendorDomian.Core
 {
-    public class VendorSystem : IVendorData, IVendor
+    public class VendorSystem : IDefaultVendorData, IVendor
     {
-        private readonly IMarketHandler _marketHandler;
-        private readonly IVendorEventHandler _vendorEventHandler;
+        private readonly Dictionary<string, IMarketHandler> _marketTable;
+        private IMarketHandler _defaultMarket;
         private readonly IServiceProvider _serviceProvider;
         private string selectedId;
 
-        public EVendorType VendorId => _marketHandler?.VendorType ?? EVendorType.None;
 
-        int IVendorData.UnconsumePurchaseCount => _marketHandler?.UnconsumePurchaseCount ?? 0;
+        public string MarketId => _defaultMarket?.Id;
 
-        public string MarketId => _marketHandler?.Id;
-
-        public bool IsValidate => _marketHandler.HasValidation;
+        public bool IsValidate => _defaultMarket.HasValidation;
 
         [UnityEngine.Scripting.Preserve]
-        public VendorSystem(IServiceProvider serviceProvider, IMarketHandler marketHandler, IVendorEventHandler vendorEventHandler)
+        public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup, IVendorEventListener vendorEventHandler)
         {
-            _marketHandler = marketHandler;
-            _vendorEventHandler = vendorEventHandler;
+            if (marketGroup == null)
+                throw new ArgumentNullException("the market group is null");
+
+            _marketTable = new Dictionary<string, IMarketHandler>(2);
+            foreach (var market in marketGroup.Markets)
+            {
+                if (market.Id == marketGroup.DefaultMarketId)
+                    _defaultMarket = market;
+                _marketTable.Add(market.Id, market);
+            }
+            if (_defaultMarket == null)
+            {
+                foreach (var market in marketGroup.Markets)
+                {
+                    _defaultMarket = market;
+                    break;
+                }
+            }
             _serviceProvider = serviceProvider;
         }
 
         [UnityEngine.Scripting.Preserve]
-        public Task WaitForLoading()
+        public async Task WaitForLoading()
         {
-            _marketHandler.Initialization(_serviceProvider);
-            return Task.CompletedTask;
+            foreach (var item in _marketTable.Values)
+            {
+                await item.Loading();
+            }
+        }
+
+
+        [UnityEngine.Scripting.Preserve]
+        public IEnumerator WaitForLoadingCoroutine()
+        {
+            foreach (var item in _marketTable.Values)
+            {
+                yield return item.LoadingEnumerable();
+            }
         }
 
         void IVendor.PurchaseProduct(string packName, bool hasOff)
         {
             selectedId = packName;
-            VendorPurchaseItem product = _marketHandler.GetProductByName(selectedId);
-            //Debug.Log("try to buy pack id :" + packName);
-            //Debug.Log("try to buy product id :" + product.ProductId);
-            if (product.Type == EProductType.Consumable)
-            {
-                string productId = hasOff && product.HasOff ? product.OffProductId : product.ProductId;
-                //Debug.Log("try to buy product id :" + productId);
-                _marketHandler.TryBuyProduct(productId, Guid.NewGuid().ToString());
-            }
-            else
-                _vendorEventHandler.PurchasedFailed(0, "Product is not consumable");
+            VendorPurchaseItem product = _defaultMarket.GetProductByName(selectedId);
+            string productId = hasOff && product.HasOff ? product.OffProductId : product.ProductId;
+            _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());
         }
 
         void IVendor.OpenVendorLocation()
         {
-            _marketHandler.OpenPage();
+            _defaultMarket.OpenPage();
         }
 
         void IVendor.OpenRate(Action<bool> onDone)
         {
-            _marketHandler.RateUs(onDone);
+            _defaultMarket.RateUs(onDone);
         }
 
         void IVendor.CheckUnconsumePurchase()
         {
             if (Application.internetReachability == NetworkReachability.NotReachable)
                 return;
-            _marketHandler.FetchUnconsumePurchases();
+            _defaultMarket.FetchUnconsumePurchases();
         }
 
-        (float, VendorCurrencyItem[]) IVendorData.GetProducePriceAndData(string key)
+        (float, VendorCurrencyItem[]) IDefaultVendorData.GetProducePriceAndData(string key)
         {
-            var item = _marketHandler.GetProductByName(key);
+            var item = _defaultMarket.GetProductByName(key);
             return (item.Price, item.CurrenciesData);
         }
 
-        VendorCurrencyItem[] IVendorData.GetCurrencyByPurchaseId(string purchaseId)
+        VendorCurrencyItem[] IDefaultVendorData.GetCurrencyByPurchaseId(string purchaseId)
         {
-            var item = _marketHandler.GetProductNameById(purchaseId);
+            var item = _defaultMarket.GetProductNameById(purchaseId);
             return item.CurrenciesData;
         }
 
 
-        void IVendorData.EnableProductOffState(string itemName)
+        void IDefaultVendorData.EnableProductOffState(string itemName)
         {
-            _marketHandler.SetProdcutSalesOffState(itemName, true);
+            _defaultMarket.SetProdcutSalesOffState(itemName, true);
         }
 
-        void IVendorData.DisableAllProductOffState()
+        void IDefaultVendorData.DisableAllProductOffState()
         {
-            _marketHandler.SetAllProdcutSalesOffState(false);
+            _defaultMarket.SetAllProdcutSalesOffState(false);
         }
 
         public void ResolveLastUnconsumePurchase()
         {
-            if (Application.internetReachability == NetworkReachability.NotReachable || _marketHandler == null)
+            if (Application.internetReachability == NetworkReachability.NotReachable || _marketTable == null)
             {
                 //_purchaseHandler.OnItemNotPurchase();
             }
             else
             {
-                _marketHandler?.ResolveLastUnconsumePurchase();
+                _defaultMarket?.ResolveLastUnconsumePurchase();
             }
         }
     }

@@ -1,5 +1,8 @@
-﻿using System;
-using GameWarriors.VendorDomian.Data;
+﻿using GameWarriors.VendorDomian.Data;
+using System;
+using System.Collections;
+using System.Threading.Tasks;
+using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
@@ -14,7 +17,10 @@ namespace GameWarriors.VendorDomian.Abstraction
         int? UnconsumePurchaseCount { get; }
         bool HasValidation { get; }
 
-        void Initialization(IVendorResourceLoader resourceLoader, IServiceProvider serviceProvider);
+        void Initialization(IServiceProvider serviceProvider);
+        Task Loading();
+        IEnumerable LoadingEnumerable();
+
         void OpenPage();
         void RateUs(Action<bool> rateDone);
         void FetchUnconsumePurchases();
