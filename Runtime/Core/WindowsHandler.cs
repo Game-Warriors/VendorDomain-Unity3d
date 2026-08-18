@@ -16,7 +16,7 @@ namespace GameWarriors.VendorDomian.Core
         private bool _isFetchingUnconsume;
         private Dictionary<string, VendorPurchaseItem> _productsTable;
 
-        public string MarketId => "Windows";
+        public string Id => "Windows";
         public string MarketPackageName => "";
 
         public string VendorLink => "";

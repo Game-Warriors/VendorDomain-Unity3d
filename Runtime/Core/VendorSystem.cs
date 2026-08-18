@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Data;
+using GameWarriors.VendorDomian.Enums;
 
 namespace GameWarriors.VendorDomian.Core
 {
@@ -18,7 +19,7 @@ namespace GameWarriors.VendorDomian.Core
 
         int IVendorData.UnconsumePurchaseCount => _marketHandler?.UnconsumePurchaseCount ?? 0;
 
-        public string MarketId => _marketHandler?.MarketId;
+        public string MarketId => _marketHandler?.Id;
 
         public bool IsValidate => _marketHandler.HasValidation;
 

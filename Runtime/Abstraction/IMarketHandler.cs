@@ -7,14 +7,14 @@ namespace GameWarriors.VendorDomian.Abstraction
 
     public interface IMarketHandler
     {
-        public EVendorType VendorType { get; }
-        string MarketId { get; }
+        bool IsInitialized { get; }
+        string Id { get; }
         string MarketPackageName { get; }
         string VendorLink { get; }
-        int UnconsumePurchaseCount { get; }
+        int? UnconsumePurchaseCount { get; }
         bool HasValidation { get; }
 
-        void Initialization(IServiceProvider serviceProvider);
+        void Initialization(IVendorResourceLoader resourceLoader, IServiceProvider serviceProvider);
         void OpenPage();
         void RateUs(Action<bool> rateDone);
         void FetchUnconsumePurchases();

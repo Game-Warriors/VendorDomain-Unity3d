@@ -2,7 +2,6 @@
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
-    public enum EVendorType { None, Bazaar, Google, Apple, Myket, Windows }
 
     public interface IVendor
     {

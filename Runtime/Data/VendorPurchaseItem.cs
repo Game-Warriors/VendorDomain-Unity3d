@@ -11,7 +11,7 @@ namespace GameWarriors.VendorDomian.Data
         private string _name;
         [SerializeField]
         private string _productId;
-       [SerializeField]
+        [SerializeField]
         private string _offProductId;
         [SerializeField]
         private float _price;
@@ -40,6 +40,11 @@ namespace GameWarriors.VendorDomian.Data
         public void SetOffState(bool state)
         {
             _hasOff = state;
+        }
+
+        public void SetPrice(float price)
+        {
+            _price = price;
         }
     }
 }

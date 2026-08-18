@@ -21,7 +21,7 @@ namespace GameWarriors.VendorDomian.Core
         private IVendorEventHandler _vendorEvent;
         private IPaymentServer _paymentServer;
 
-        public string MarketId => "ZarinpaliOS";
+        public string Id => "ZarinpaliOS";
         public string MarketPackageName => "itms-apps://";
         public string VendorLink => "https://apps.apple.com/us/app/clc-ba/id1543807261";
         public int UnconsumePurchaseCount => _unconsumePurchases?.Count ?? 0;

@@ -24,7 +24,7 @@ namespace GameWarriors.VendorDomian.Core
         public string PriceUnit => "T";
         public bool IsInitialized => true;
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
-        public string MarketId => "ZarinpalAndroid";
+        public string Id => "ZarinpalAndroid";
         public int UnconsumePurchaseCount => _unconsumePurchases?.Count ?? 0;
 
         public EVendorType VendorType => EVendorType.Google;
