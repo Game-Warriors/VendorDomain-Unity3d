@@ -1,3 +1,6 @@
+    version : 0.1.6
+    fix editor save location and data name, fix reconnect on try to purchase
+
     version : 0.1.5
     add product meta data structure and subscription info structure
 

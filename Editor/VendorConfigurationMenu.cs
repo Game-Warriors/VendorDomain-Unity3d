@@ -1,16 +1,19 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using GameWarriors.VendorDomian.Data;
+using GameWarriors.VendorDomian.Constants;
+using System.IO;
 
 namespace GameWarriors.VendorDomian.VendorEditor
 {
     public class VendorConfigurationMenu : ScriptableWizard
     {
+        private const string ASSET_DIRECTORY = "Assets/AssetData/Vendor";
+        private readonly string BAZAAR_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.BAZAAR}VendorConfig.asset";
+        private readonly string GOOGLE_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.GOOGLE}VendorConfig.asset";
+        private readonly string APPLE_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.APPLE}VendorConfig.asset";
+        private readonly string ZARINPAL_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.ZARINPAL}VendorConfig.asset";
 
-        private const string BAZAAR_ASSET_PATH = "Assets/Scripts/GameWarriors.VendorDomian/Resources/BazaarVendorConfig.asset";
-        private const string GOOGLE_ASSET_PATH = "Assets/Scripts/GameWarriors.VendorDomian/Resources/GoogleVendorConfig.asset";
-        private const string APPLE_ASSET_PATH = "Assets/Scripts/GameWarriors.VendorDomian/Resources/AppleVendorConfig.asset";
-        private const string ZARINPAL_ASSET_PATH = "Assets/Scripts/GameWarriors.VendorDomian/Resources/ZarinpalVendorConfig.asset";
         [SerializeField]
         private VendorPurchaseItem[] _bazaarItems;
         [SerializeField]
@@ -29,6 +32,7 @@ namespace GameWarriors.VendorDomian.VendorEditor
 
         private void Initialization()
         {
+            Directory.CreateDirectory(ASSET_DIRECTORY);
             VendorConfigurationObject googleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(GOOGLE_ASSET_PATH);
             VendorConfigurationObject bazaarAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(BAZAAR_ASSET_PATH);
             VendorConfigurationObject appleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(APPLE_ASSET_PATH);

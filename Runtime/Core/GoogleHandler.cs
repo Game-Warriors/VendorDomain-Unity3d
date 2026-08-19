@@ -9,6 +9,7 @@ namespace GameWarriors.VendorDomian.Core
     using GameWarriors.VendorDomian.Constants;
     using GameWarriors.VendorDomian.Enums;
     using System.Collections.Generic;
+    using System.Threading.Tasks;
     using UnityEngine.Purchasing;
 
 
@@ -68,6 +69,12 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnStoreConnected += StoreConnected;
 
             //_storeController.ProcessPendingOrdersOnPurchasesFetched
+            await TryConnecting();
+
+        }
+
+        private async System.Threading.Tasks.Task<bool> TryConnecting()
+        {
             try
             {
                 _state = EStoreSetupState.Initializing;
@@ -77,10 +84,11 @@ namespace GameWarriors.VendorDomian.Core
             {
                 _state = EStoreSetupState.None;
                 _vendorEventListener.StoreInitializeFailed(Id, e.ToString());
-                return;
+                return false;
             }
-        }
 
+            return true;
+        }
 
         private async void OnLoadDone(VendorConfigurationObject resource)
         {
@@ -219,17 +227,25 @@ namespace GameWarriors.VendorDomian.Core
             return;
         }
 
-        public void TryBuyProduct(string sku, string payload)
+        public async void TryBuyProduct(string sku, string payload)
         {
             VendorPurchaseItem purchaseItem = GetProductNameById(sku);
-            if (_storeController == null || !IsInitialized)
+            if (_storeController == null)
             {
                 _vendorEventListener.PurchasedFailed(Id, purchaseItem, 0, "store not initializaed");
                 return;
             }
 
-            Product product = _storeController.GetProductById(sku);
+            if (!IsInitialized)
+            {
+                bool isSuccess = await TryConnecting();
+                if (!isSuccess)
+                {
+                    return;
+                }
+            }
 
+            Product product = _storeController.GetProductById(sku);
             if (product == null)
             {
                 _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)PurchaseFailureReason.NotSupported, "product not found");
