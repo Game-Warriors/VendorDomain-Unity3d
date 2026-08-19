@@ -6,7 +6,7 @@ using GameWarriors.VendorDomian.Core;
 
 public static class CreateVendorMarket
 {
-    public static IMarketHandler CreateDefaultMarket()
+    public static IMarketHandler CreateDefaultMarket(IVendorEventListener eventListener, IVendorResourceLoader resourceLoader, IPaymentServer paymentServer)
     {
         IMarketHandler marketHandler = null;
 #if BAZAAR && !UNITY_EDITOR
@@ -21,7 +21,7 @@ public static class CreateVendorMarket
             }
             else
             {
-                marketHandler = new GoogleHandler();
+                marketHandler = new GoogleHandler(resourceLoader, eventListener);
             }
 #elif APPLE && !UNITY_EDITOR
             string timeName = TimeZone.CurrentTimeZone.StandardName;
@@ -34,7 +34,7 @@ public static class CreateVendorMarket
                 marketHandler = new AppleHandler();
             }
 #else
-        marketHandler = new WindowsHandler();
+        marketHandler = new WindowsHandler(eventListener, paymentServer);
 #endif
         return marketHandler;
     }

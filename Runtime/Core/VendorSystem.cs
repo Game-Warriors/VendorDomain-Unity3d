@@ -15,13 +15,13 @@ namespace GameWarriors.VendorDomian.Core
         private readonly IServiceProvider _serviceProvider;
         private string selectedId;
 
-
         public string MarketId => _defaultMarket?.Id;
-
         public bool IsValidate => _defaultMarket.HasValidation;
 
+        IEnumerable<VendorPurchaseItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
+
         [UnityEngine.Scripting.Preserve]
-        public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup, IVendorEventListener vendorEventHandler)
+        public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup)
         {
             if (marketGroup == null)
                 throw new ArgumentNullException("the market group is null");
@@ -29,7 +29,7 @@ namespace GameWarriors.VendorDomian.Core
             _marketTable = new Dictionary<string, IMarketHandler>(2);
             foreach (var market in marketGroup.Markets)
             {
-                if (market.Id == marketGroup.DefaultMarketId)
+                if (market.Id == marketGroup.InitialDefaultMarketId)
                     _defaultMarket = market;
                 _marketTable.Add(market.Id, market);
             }
@@ -47,20 +47,76 @@ namespace GameWarriors.VendorDomian.Core
         [UnityEngine.Scripting.Preserve]
         public async Task WaitForLoading()
         {
+            IVendorResourceLoader resourceLoader = _serviceProvider.GetService(typeof(IVendorResourceLoader)) as IVendorResourceLoader;
             foreach (var item in _marketTable.Values)
             {
-                await item.Loading();
+                item.StartLoading(resourceLoader);
+            }
+
+            while (true)
+            {
+                bool anyLoading = false;
+                foreach (var item in _marketTable.Values)
+                {
+                    if (item.IsLoading)
+                    {
+                        anyLoading = true;
+                        break;
+                    }
+                }
+
+                if (!anyLoading)
+                    break;
+                await Task.Delay(100);
             }
         }
-
 
         [UnityEngine.Scripting.Preserve]
         public IEnumerator WaitForLoadingCoroutine()
         {
+            IVendorResourceLoader resourceLoader = _serviceProvider.GetService(typeof(IVendorResourceLoader)) as IVendorResourceLoader;
             foreach (var item in _marketTable.Values)
             {
-                yield return item.LoadingEnumerable();
+                item.StartLoading(resourceLoader);
             }
+
+            while (true)
+            {
+                bool anyLoading = false;
+                foreach (var item in _marketTable.Values)
+                {
+                    if (item.IsLoading)
+                    {
+                        anyLoading = true;
+                        break;
+                    }
+                }
+
+                if (!anyLoading)
+                    yield break;
+
+                yield return null;
+            }
+        }
+
+        [UnityEngine.Scripting.Preserve]
+        public void Initialization()
+        {
+            foreach (var item in _marketTable.Values)
+            {
+                item.Initialization(_serviceProvider);
+            }
+        }
+
+        void IVendor.ChangeDefaultMarket(string newDefault)
+        {
+            foreach (var market in _marketTable.Values)
+            {
+                if (string.Equals(market.Id, newDefault, StringComparison.OrdinalIgnoreCase))
+                    _defaultMarket = market;
+                return;
+            }
+            throw new KeyNotFoundException($"the request {newDefault} market not exist");
         }
 
         void IVendor.PurchaseProduct(string packName, bool hasOff)

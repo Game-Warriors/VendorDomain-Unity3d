@@ -1,8 +1,6 @@
 ﻿using GameWarriors.VendorDomian.Data;
 using System;
-using System.Collections;
-using System.Threading.Tasks;
-using UnityEngine;
+using System.Collections.Generic;
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
@@ -11,22 +9,22 @@ namespace GameWarriors.VendorDomian.Abstraction
     public interface IMarketHandler
     {
         bool IsInitialized { get; }
+        bool IsLoading { get; }
         string Id { get; }
         string MarketPackageName { get; }
         string VendorLink { get; }
         int? UnconsumePurchaseCount { get; }
         bool HasValidation { get; }
+        IEnumerable<VendorPurchaseItem> PurchaseItems { get; }
 
         void Initialization(IServiceProvider serviceProvider);
-        Task Loading();
-        IEnumerable LoadingEnumerable();
-
+        void StartLoading(IVendorResourceLoader resourceLoader);
         void OpenPage();
         void RateUs(Action<bool> rateDone);
         void FetchUnconsumePurchases();
         void ResolveLastUnconsumePurchase();
         void TryBuyProduct(string sku, string payload);
-        void RefreshPruchases(string sku);
+        void RefreshPurchases(string sku);
         void Dispose();
         VendorPurchaseItem GetProductByName(string id);
         VendorPurchaseItem GetProductNameById(string productId);

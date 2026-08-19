@@ -7,6 +7,11 @@ namespace GameWarriors.VendorDomian.Core
 {
     public class VendorDefaultResourceLoader : IVendorResourceLoader
     {
+        public VendorConfigurationObject Load(string id)
+        {
+            return Resources.Load<VendorConfigurationObject>($"{id}VendorConfig");
+        }
+
         public void LoadAsync(string id, Action<VendorConfigurationObject> onLoadDone)
         {
             ResourceRequest operation = Resources.LoadAsync<VendorConfigurationObject>($"{id}VendorConfig");

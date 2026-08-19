@@ -4,7 +4,7 @@ namespace GameWarriors.VendorDomian.Abstraction
 {
     public interface IMarketGroup 
     {
-       string DefaultMarketId { get; }
+       string InitialDefaultMarketId { get; }
        IEnumerable<IMarketHandler> Markets { get; }
     }
 }

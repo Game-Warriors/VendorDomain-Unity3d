@@ -5,7 +5,6 @@ namespace GameWarriors.VendorDomian.Abstraction
     public interface IVendorData
     {
         string MarketId { get; }
-        EVendorType VendorId { get; }
         int UnconsumePurchaseCount { get; }
         bool IsValidate { get; }
 

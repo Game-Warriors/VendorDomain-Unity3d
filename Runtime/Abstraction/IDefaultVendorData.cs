@@ -1,4 +1,5 @@
 ﻿using GameWarriors.VendorDomian.Data;
+using System.Collections.Generic;
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
@@ -6,7 +7,7 @@ namespace GameWarriors.VendorDomian.Abstraction
     {
         string MarketId { get; }
         bool IsValidate { get; }
-
+        IEnumerable<VendorPurchaseItem> PurchaseItems { get; }
         (float, VendorCurrencyItem[]) GetProducePriceAndData(string key);
         VendorCurrencyItem[] GetCurrencyByPurchaseId(string purchaseId);
         void EnableProductOffState(string itemName);

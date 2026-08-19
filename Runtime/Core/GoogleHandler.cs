@@ -25,26 +25,15 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
         private Dictionary<string, VendorPurchaseItem> _productsSkuTable;
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
-        public IEnumerable<VendorPurchaseItem> PurchaseItems
-        {
-            get
-            {
-                foreach (VendorPurchaseItem item in _productsNameTable.Values)
-                {
-                    yield return item;
-                }
-            }
-        }
 
         public string Id => MarketId.GOOGLE;
         public string MarketPackageName => "com.android.vending";
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
-
         public int? UnconsumePurchaseCount { get; private set; }
-
         public bool HasValidation => false;
-
         public bool IsInitialized { get; private set; }
+        public bool IsLoading => _productsNameTable == null;
+        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
 
         public GoogleHandler(IVendorResourceLoader resourceLoader, IVendorEventListener vendorEventListener)
         {
@@ -52,22 +41,14 @@ namespace GameWarriors.VendorDomian.Core
             resourceLoader.LoadAsync(Id, OnLoadDone);
         }
 
+        public void StartLoading(IVendorResourceLoader resourceLoader)
+        {
+
+        }
+
         public void Dispose()
         {
             return;
-        }
-
-        public async Task Loading()
-        {
-            while (_productsNameTable == null)
-            {
-                await Task.Delay(100);
-            }
-        }
-
-        public IEnumerable LoadingEnumerable()
-        {
-            yield return new WaitUntil(() => _productsNameTable != null);
         }
 
         public async void Initialization(IServiceProvider serviceProvider)
@@ -210,7 +191,7 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.FetchProducts(products);
         }
 
-        public void RefreshPruchases(string sku)
+        public void RefreshPurchases(string sku)
         {
             _storeController.FetchPurchases();
         }

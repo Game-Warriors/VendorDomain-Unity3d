@@ -6,7 +6,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -24,19 +23,13 @@ namespace GameWarriors.VendorDomian.Core
 
         public string MarketPackageName => "com.android.vending";
         public string PriceUnit => "T";
-        public bool IsInitialized => true;
+        public bool IsInitialized { get; private set; }
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
         public string Id => MarketId.ZARINPAL;
         public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
-
         public bool HasValidation => false;
-
-        public ZarinpalAndroidHandler(IVendorEventListener vendorEvent, IVendorResourceLoader resourceLoader, IPaymentServer paymentServer)
-        {
-            _eventListener = vendorEvent;
-            _paymentServer = paymentServer;
-            resourceLoader.LoadAsync(Id, OnLoadDone);
-        }
+        public bool IsLoading => _productsNameTable == null;
+        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
 
         private async void OnLoadDone(VendorConfigurationObject resource)
         {
@@ -55,27 +48,23 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
+        public void StartLoading(IVendorResourceLoader resourceLoader)
+        {
+            resourceLoader.LoadAsync(Id, OnLoadDone);
+        }
+
         public void Initialization(IServiceProvider serviceProvider)
         {
+            _eventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
+            _paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
+
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
 #if DEVELOPMENT
             Debug.Log("Zarinpal Initialized");
 #endif
             _zarinpalActivity = new AndroidJavaClass("com.Ario.zarinpal.ZarinpalActivity");
             _zarinpalActivity.CallStatic("initialize", _paymentServer.RequestPayUrl, Application.identifier, "clc", "paymentresult");
-        }
-
-        public async Task Loading()
-        {
-            while (_productsNameTable == null)
-            {
-                await Task.Delay(100);
-            }
-        }
-
-        public IEnumerable LoadingEnumerable()
-        {
-            yield return new WaitUntil(() => _productsNameTable != null);
+            IsInitialized = true;
         }
 
         public void OpenPage()
@@ -158,7 +147,7 @@ namespace GameWarriors.VendorDomian.Core
             //}
         }
 
-        public void RefreshPruchases(string sku)
+        public void RefreshPurchases(string sku)
         {
             Debug.Log("RefreshPruchases");
         }
@@ -254,6 +243,8 @@ namespace GameWarriors.VendorDomian.Core
                 item.SetOffState(state);
             }
         }
+
+
     }
 }
 #endif

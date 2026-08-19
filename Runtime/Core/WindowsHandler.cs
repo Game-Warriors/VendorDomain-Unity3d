@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Purchasing;
 
 
 namespace GameWarriors.VendorDomian.Core
@@ -22,19 +21,21 @@ namespace GameWarriors.VendorDomian.Core
 
         public string Id => MarketId.WINDOWS;
         public string MarketPackageName => string.Empty;
-
         public string VendorLink => string.Empty;
-
         public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
-
         public bool HasValidation => false;
-
         public bool IsInitialized { get; private set; }
+        public bool IsLoading => _productsNameTable == null;
+        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
 
-        public WindowsHandler(IVendorEventListener vendorEvent, IVendorResourceLoader resourceLoader, IPaymentServer paymentServer)
+        public WindowsHandler(IVendorEventListener vendorEvent, IPaymentServer paymentServer)
         {
             _vendorEvent = vendorEvent;
             _paymentServer = paymentServer;
+        }
+
+        public void StartLoading(IVendorResourceLoader resourceLoader)
+        {
             resourceLoader.LoadAsync(Id, OnLoadDone);
         }
 
@@ -96,19 +97,7 @@ namespace GameWarriors.VendorDomian.Core
         public void Initialization(IServiceProvider serviceProvider)
         {
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
-        }
-
-        public async Task Loading()
-        {
-            while (_productsNameTable == null)
-            {
-                await Task.Delay(100);
-            }
-        }
-
-        public IEnumerable LoadingEnumerable()
-        {
-            yield return new WaitUntil(() => _productsNameTable != null);
+            IsInitialized = true;
         }
 
         public void OpenPage()
@@ -121,7 +110,7 @@ namespace GameWarriors.VendorDomian.Core
 
         }
 
-        public void RefreshPruchases(string sku)
+        public void RefreshPurchases(string sku)
         {
 
         }
@@ -185,7 +174,6 @@ namespace GameWarriors.VendorDomian.Core
                 yield return item;
             }
         }
-
 
     }
 }
