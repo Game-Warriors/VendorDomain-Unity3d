@@ -1,4 +1,5 @@
-﻿using GameWarriors.VendorDomian.Enums;
+﻿using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Enums;
 using System;
 using UnityEngine;
 
@@ -25,6 +26,7 @@ namespace GameWarriors.VendorDomian.Data
         private bool _isEnable;
 
         private bool _hasOff;
+        public IPurchaseItemMeta ItemMeta { get; private set; }
 
         public string Name => _name;
         public string ProductId => _productId;
@@ -37,6 +39,7 @@ namespace GameWarriors.VendorDomian.Data
         public int PurchaseLimit => _purchaseLimit;
         public bool EnableState => _isEnable;
 
+
         public void SetOffState(bool state)
         {
             _hasOff = state;
@@ -45,6 +48,11 @@ namespace GameWarriors.VendorDomian.Data
         public void SetPrice(float price)
         {
             _price = price;
+        }
+
+        public void SetMetaData(IPurchaseItemMeta meta)
+        {
+            ItemMeta = meta;
         }
     }
 }

@@ -234,6 +234,11 @@ namespace GameWarriors.VendorDomian.Core
         {
             
         }
+
+        public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
 #endif

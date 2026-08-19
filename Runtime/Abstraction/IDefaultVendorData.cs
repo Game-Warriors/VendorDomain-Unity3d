@@ -10,6 +10,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         IEnumerable<VendorPurchaseItem> PurchaseItems { get; }
         (float, VendorCurrencyItem[]) GetProducePriceAndData(string key);
         VendorCurrencyItem[] GetCurrencyByPurchaseId(string purchaseId);
+        ISubscriptionInfo GetSubscriptionInfo(string itemName);
         void EnableProductOffState(string itemName);
         void DisableAllProductOffState();
     }

@@ -4,10 +4,8 @@ using GameWarriors.VendorDomian.Constants;
 using GameWarriors.VendorDomian.Data;
 using GameWarriors.VendorDomian.Enums;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Net;
-using System.Threading.Tasks;
 using UnityEngine;
 
 #if GOOGLE
@@ -33,6 +31,8 @@ namespace GameWarriors.VendorDomian.Core
         public bool HasValidation => false;
         public bool IsLoading => _productsNameTable == null;
         public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
+
+        public IEnumerable<IPurchaseItemMeta> PurchaseItemsMeta => throw new NotImplementedException();
 
         private async void OnLoadDone(VendorConfigurationObject resource)
         {
@@ -250,6 +250,11 @@ namespace GameWarriors.VendorDomian.Core
         public void RefreshProducts()
         {
             
+        }
+
+        public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
+        {
+            throw new NotSupportedException();
         }
     }
 }

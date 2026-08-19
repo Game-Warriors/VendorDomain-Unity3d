@@ -29,8 +29,9 @@ namespace GameWarriors.VendorDomian.Abstraction
         void RefreshProducts();
         void RefreshPurchases(string sku);
         void Dispose();
-        VendorPurchaseItem GetProductByName(string id);
+        VendorPurchaseItem GetProductByName(string itemName);
         VendorPurchaseItem GetProductNameById(string productId);
+        ISubscriptionInfo GetSubscriptionInfoByName(string itemName);
         void SetProdcutSalesOffState(string itemName, bool offState);
         void SetAllProdcutSalesOffState(bool state);
     }

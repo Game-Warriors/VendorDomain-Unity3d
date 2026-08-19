@@ -1,3 +1,6 @@
+    version : 0.1.5
+    add product meta data structure and subscription info structure
+
     version : 0.1.4
     add refresh product methods, fetch products, purchases states to vendors
 

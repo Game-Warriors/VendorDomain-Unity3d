@@ -8,9 +8,7 @@ namespace GameWarriors.VendorDomian.Core
 {
     using GameWarriors.VendorDomian.Constants;
     using GameWarriors.VendorDomian.Enums;
-    using System.Collections;
     using System.Collections.Generic;
-    using System.Threading.Tasks;
     using UnityEngine.Purchasing;
 
 
@@ -144,8 +142,6 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-
-
         private void OnPurchasePending(PendingOrder order)
         {
             foreach (var item in order.CartOrdered.Items())
@@ -174,7 +170,7 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
 
-            _vendorEventListener.OnSubscriptionUpdate(Id);
+            _vendorEventListener.OnSubscriptionsUpdate(Id);
         }
 
         private void StoreConnected()
@@ -285,6 +281,15 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
+        public ISubscriptionInfo GetSubscriptionInfoByName(string productName)
+        {
+            if (_productsNameTable.TryGetValue(productName, out var item))
+            {
+                if (_subscriptionsTable.TryGetValue(item.ProductId, out SubscriptionInfo info))
+                    return new SubscriptionData(info.GetExpireDate());
+            }
+            return null;
+        }
 
         private void OnProductsFetched(List<Product> products)
         {
@@ -295,6 +300,7 @@ namespace GameWarriors.VendorDomian.Core
                 if (_productsSkuTable.TryGetValue(sku, out VendorPurchaseItem product))
                 {
                     product.SetPrice((float)item.metadata.localizedPrice);
+                    product.SetMetaData(new GoogeProductMeta(item.metadata));
                 }
             }
 

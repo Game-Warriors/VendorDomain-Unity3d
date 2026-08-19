@@ -5,15 +5,15 @@ namespace GameWarriors.VendorDomian.Abstraction
 {
     public interface IVendorEventListener
     {
-        void OnVendorStateChanged(string id, EStoreSetupState setupState);
-        void PurchasedFailed(string id, VendorPurchaseItem purchaseItem, int state, string error);
-        void PurchasedSuccessful(string id, VendorPurchaseItem purchaseItem, string currencyType, long purchaseTime, string token, string transactionId);
-        void StoreInitializeFailed(string id, string error);
-        void UserCancelPurchase(string id, VendorPurchaseItem purchaseItem, string error);
-        void OnError(string id, int state, string error);
-        void ConsumeSuccess(string id, VendorPurchaseItem purchaseItem, string token, string transactionId);
-        void ConsumeFailed(string id, VendorPurchaseItem purchaseItem, string token, string transactionId);
-        void OnPurchaseItemsUpdate(string id);
-        void OnSubscriptionUpdate(string id);
+        void OnVendorStateChanged(string marketId, EStoreSetupState setupState);
+        void PurchasedFailed(string marketId, VendorPurchaseItem purchaseItem, int state, string error);
+        void PurchasedSuccessful(string marketId, VendorPurchaseItem purchaseItem, string currencyType, long purchaseTime, string token, string transactionId);
+        void StoreInitializeFailed(string marketId, string error);
+        void UserCancelPurchase(string marketId, VendorPurchaseItem purchaseItem, string error);
+        void OnError(string marketId, int state, string error);
+        void ConsumeSuccess(string marketId, VendorPurchaseItem purchaseItem, string token, string transactionId);
+        void ConsumeFailed(string marketId, VendorPurchaseItem purchaseItem, string token, string transactionId);
+        void OnPurchaseItemsUpdate(string marketId);
+        void OnSubscriptionsUpdate(string marketId);
     }
 }

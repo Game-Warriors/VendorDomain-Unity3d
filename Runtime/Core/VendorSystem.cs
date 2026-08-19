@@ -26,6 +26,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool IsPurchasesFetched => _defaultMarket.IsPurchasesFetched;
 
+
+
         [UnityEngine.Scripting.Preserve]
         public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup)
         {
@@ -128,7 +130,7 @@ namespace GameWarriors.VendorDomian.Core
         void IVendor.PurchaseProduct(string packName, bool hasOff)
         {
             selectedId = packName;
-            VendorPurchaseItem product = _defaultMarket.GetProductByName(selectedId);
+            VendorPurchaseItem product = _defaultMarket.GetProductByName(packName);
             string productId = hasOff && product.HasOff ? product.OffProductId : product.ProductId;
             _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());
         }
@@ -191,5 +193,9 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
+        ISubscriptionInfo IDefaultVendorData.GetSubscriptionInfo(string itemName)
+        {
+            return _defaultMarket?.GetSubscriptionInfoByName(itemName);
+        }
     }
 }

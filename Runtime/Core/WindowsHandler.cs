@@ -181,6 +181,11 @@ namespace GameWarriors.VendorDomian.Core
         {
             
         }
+
+        public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
 public enum EPaymentProviderType : short { None, Zarinpal }
