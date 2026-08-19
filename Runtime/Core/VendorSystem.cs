@@ -20,6 +20,12 @@ namespace GameWarriors.VendorDomian.Core
 
         IEnumerable<VendorPurchaseItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
 
+        public bool IsInitialized => _defaultMarket.IsInitialized;
+
+        public bool IsProductFetched => _defaultMarket.IsProductFetched;
+
+        public bool IsPurchasesFetched => _defaultMarket.IsPurchasesFetched;
+
         [UnityEngine.Scripting.Preserve]
         public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup)
         {
@@ -144,6 +150,12 @@ namespace GameWarriors.VendorDomian.Core
             _defaultMarket.FetchUnconsumePurchases();
         }
 
+
+        void IVendor.RefreshProducts()
+        {
+            _defaultMarket?.RefreshProducts();
+        }
+
         (float, VendorCurrencyItem[]) IDefaultVendorData.GetProducePriceAndData(string key)
         {
             var item = _defaultMarket.GetProductByName(key);
@@ -178,5 +190,6 @@ namespace GameWarriors.VendorDomian.Core
                 _defaultMarket?.ResolveLastUnconsumePurchase();
             }
         }
+
     }
 }

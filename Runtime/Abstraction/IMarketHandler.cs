@@ -16,6 +16,8 @@ namespace GameWarriors.VendorDomian.Abstraction
         int? UnconsumePurchaseCount { get; }
         bool HasValidation { get; }
         IEnumerable<VendorPurchaseItem> PurchaseItems { get; }
+        bool IsProductFetched { get; }
+        bool IsPurchasesFetched { get; }
 
         void Initialization(IServiceProvider serviceProvider);
         void StartLoading(IVendorResourceLoader resourceLoader);
@@ -24,6 +26,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         void FetchUnconsumePurchases();
         void ResolveLastUnconsumePurchase();
         void TryBuyProduct(string sku, string payload);
+        void RefreshProducts();
         void RefreshPurchases(string sku);
         void Dispose();
         VendorPurchaseItem GetProductByName(string id);

@@ -51,6 +51,7 @@ namespace GameWarriors.VendorDomian.Core
             }
             _billingService = billingService;
             UnityPurchasing.Initialize(this, builder);
+                        _storeController.RestoreTransactions
         }
 
         public void RefreshPruchases(string sku)

@@ -6,6 +6,8 @@ using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Data;
 using System.Threading.Tasks;
 using System.Collections;
+using GameWarriors.VendorDomian.Enums;
+
 
 #if UNITY_IOS || UNITY_EDITOR
 using System.Runtime.InteropServices;
@@ -22,7 +24,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private IVendorEventListener _vendorEvent;
         private IPaymentServer _paymentServer;
-
+        private EStoreSetupState _state;
         public string Id => "ZarinpaliOS";
         public string MarketPackageName => "itms-apps://";
         public string VendorLink => "https://apps.apple.com/us/app/clc-ba/id1543807261";
@@ -30,7 +32,9 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool HasValidation => false;
 
-        public bool IsInitialized { get; private set;  }
+        bool IMarketHandler.IsInitialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
+        bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
         public bool IsLoading => _productsNameTable == null;
 
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
@@ -38,13 +42,17 @@ namespace GameWarriors.VendorDomian.Core
         private bool _isFetchingUnconsume;
         public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
 
+        public bool IsProductFetched => throw new NotImplementedException();
+
+        public bool IsPurchasesFetched => throw new NotImplementedException();
+
         public void Initialization(IServiceProvider serviceProvider)
         {
             IVendorEventListener vendorEvent = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
             _initialize(_paymentServer.RequestPayUrl, Application.identifier, "clc", "paymentresult");
-            IsInitialized = true;
+            _state = EStoreSetupState.Initialized;
 #if DEVELOPMENT
             Debug.Log("Zarinpal ios Initialized");
 #endif
@@ -222,14 +230,9 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-        public Task Loading()
+        public void RefreshProducts()
         {
-            throw new NotImplementedException();
-        }
-
-        public IEnumerable LoadingEnumerable()
-        {
-            throw new NotImplementedException();
+            
         }
     }
 }

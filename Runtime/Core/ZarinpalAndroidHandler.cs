@@ -2,6 +2,7 @@
 using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Constants;
 using GameWarriors.VendorDomian.Data;
+using GameWarriors.VendorDomian.Enums;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -20,10 +21,12 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
-
+        private EStoreSetupState _state;
         public string MarketPackageName => "com.android.vending";
         public string PriceUnit => "T";
-        public bool IsInitialized { get; private set; }
+        bool IMarketHandler.IsInitialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
+        bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
         public string Id => MarketId.ZARINPAL;
         public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
@@ -64,7 +67,7 @@ namespace GameWarriors.VendorDomian.Core
 #endif
             _zarinpalActivity = new AndroidJavaClass("com.Ario.zarinpal.ZarinpalActivity");
             _zarinpalActivity.CallStatic("initialize", _paymentServer.RequestPayUrl, Application.identifier, "clc", "paymentresult");
-            IsInitialized = true;
+            _state = EStoreSetupState.Initialized;
         }
 
         public void OpenPage()
@@ -244,7 +247,10 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-
+        public void RefreshProducts()
+        {
+            
+        }
     }
 }
 #endif

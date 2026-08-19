@@ -7,6 +7,7 @@ using UnityEngine;
 namespace GameWarriors.VendorDomian.Core
 {
     using GameWarriors.VendorDomian.Constants;
+    using GameWarriors.VendorDomian.Enums;
     using System.Collections;
     using System.Collections.Generic;
     using System.Threading.Tasks;
@@ -20,6 +21,8 @@ namespace GameWarriors.VendorDomian.Core
         // Google Play Store-specific product identifier subscription product.
         private const string kProductNameGooglePlaySubscription = "com.unity3d.subscription.original";
         private StoreController _storeController;
+        private bool _isFetchingProducts;
+        private EStoreSetupState _state;
 
         private IVendorEventListener _vendorEventListener;
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
@@ -31,9 +34,12 @@ namespace GameWarriors.VendorDomian.Core
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
         public int? UnconsumePurchaseCount { get; private set; }
         public bool HasValidation => false;
-        public bool IsInitialized { get; private set; }
+
         public bool IsLoading => _productsNameTable == null;
         public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
+        public bool IsInitialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
+        bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
 
         public GoogleHandler(IVendorResourceLoader resourceLoader, IVendorEventListener vendorEventListener)
         {
@@ -58,20 +64,25 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnPurchasesFetched += OnPurchasesFetched;
             _storeController.OnPurchaseFailed += OnPurchaseFailed;
             _storeController.OnProductsFetched += OnProductsFetched;
+            _storeController.OnProductsFetchFailed += OnProductsFetchFailed;
             _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
             _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
             _storeController.OnStoreConnected += StoreConnected;
+
             //_storeController.ProcessPendingOrdersOnPurchasesFetched
             try
             {
+                _state = EStoreSetupState.Initializing;
                 await _storeController.Connect();
             }
             catch (Exception e)
             {
+                _state = EStoreSetupState.None;
                 _vendorEventListener.StoreInitializeFailed(Id, e.ToString());
                 return;
             }
         }
+
 
         private async void OnLoadDone(VendorConfigurationObject resource)
         {
@@ -133,20 +144,7 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-        private void OnProductsFetched(List<Product> products)
-        {
-            foreach (var item in products)
-            {
-                string sku = item.definition.id;
-                if (_productsSkuTable.TryGetValue(sku, out VendorPurchaseItem product))
-                {
-                    product.SetPrice((float)item.metadata.localizedPrice);
-                }
-            }
 
-            _vendorEventListener.OnPurchaseItemsUpdate(Id);
-            _storeController.FetchPurchases();
-        }
 
         private void OnPurchasePending(PendingOrder order)
         {
@@ -181,14 +179,22 @@ namespace GameWarriors.VendorDomian.Core
 
         private void StoreConnected()
         {
-            IsInitialized = true;
+            _state = EStoreSetupState.Initialized;
             _subscriptionsTable = new Dictionary<string, SubscriptionInfo>();
+            RefreshProducts();
+        }
+
+        public void RefreshProducts()
+        {
+            if (_isFetchingProducts)
+                return;
             var products = new List<ProductDefinition>();
             foreach (var item in _productsNameTable.Values)
             {
                 products.Add(new ProductDefinition(item.ProductId, (ProductType)item.Type));
             }
-            _storeController.FetchProducts(products);
+            _isFetchingProducts = true;
+            _storeController.FetchProductsWithNoRetries(products);
         }
 
         public void RefreshPurchases(string sku)
@@ -277,6 +283,28 @@ namespace GameWarriors.VendorDomian.Core
             {
                 item.SetOffState(state);
             }
+        }
+
+
+        private void OnProductsFetched(List<Product> products)
+        {
+            _isFetchingProducts = false;
+            foreach (var item in products)
+            {
+                string sku = item.definition.id;
+                if (_productsSkuTable.TryGetValue(sku, out VendorPurchaseItem product))
+                {
+                    product.SetPrice((float)item.metadata.localizedPrice);
+                }
+            }
+
+            _vendorEventListener.OnPurchaseItemsUpdate(Id);
+            _storeController.FetchPurchases();
+        }
+
+        private void OnProductsFetchFailed(ProductFetchFailed failed)
+        {
+            _isFetchingProducts = false;
         }
     }
 }

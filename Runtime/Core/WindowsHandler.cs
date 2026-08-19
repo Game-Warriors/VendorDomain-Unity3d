@@ -1,11 +1,10 @@
 ﻿using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Constants;
 using GameWarriors.VendorDomian.Data;
+using GameWarriors.VendorDomian.Enums;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Net;
-using System.Threading.Tasks;
 using UnityEngine;
 
 
@@ -17,6 +16,7 @@ namespace GameWarriors.VendorDomian.Core
         private IPaymentServer _paymentServer;
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
+        private EStoreSetupState _state;
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
 
         public string Id => MarketId.WINDOWS;
@@ -24,7 +24,9 @@ namespace GameWarriors.VendorDomian.Core
         public string VendorLink => string.Empty;
         public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
         public bool HasValidation => false;
-        public bool IsInitialized { get; private set; }
+        bool IMarketHandler.IsInitialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
+        bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
         public bool IsLoading => _productsNameTable == null;
         public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
 
@@ -54,6 +56,7 @@ namespace GameWarriors.VendorDomian.Core
                 VendorPurchaseItem product = resource.Products[i];
                 _productsNameTable.Add(product.Name, product);
             }
+            _state = EStoreSetupState.FetchPurchases;
         }
 
         public void Dispose()
@@ -97,7 +100,6 @@ namespace GameWarriors.VendorDomian.Core
         public void Initialization(IServiceProvider serviceProvider)
         {
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
-            IsInitialized = true;
         }
 
         public void OpenPage()
@@ -175,6 +177,10 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
+        public void RefreshProducts()
+        {
+            
+        }
     }
 }
 public enum EPaymentProviderType : short { None, Zarinpal }
