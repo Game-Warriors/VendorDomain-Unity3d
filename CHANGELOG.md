@@ -1,3 +1,6 @@
+    version : 0.1.7
+    fix circle reference issue 
+
     version : 0.1.6
     fix editor save location and data name, fix reconnect on try to purchase
 

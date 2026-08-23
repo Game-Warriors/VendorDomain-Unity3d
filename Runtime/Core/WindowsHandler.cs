@@ -30,9 +30,8 @@ namespace GameWarriors.VendorDomian.Core
         public bool IsLoading => _productsNameTable == null;
         public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
 
-        public WindowsHandler(IVendorEventListener vendorEvent, IPaymentServer paymentServer)
+        public WindowsHandler(IPaymentServer paymentServer)
         {
-            _vendorEvent = vendorEvent;
             _paymentServer = paymentServer;
         }
 
@@ -99,6 +98,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public void Initialization(IServiceProvider serviceProvider)
         {
+            IVendorEventListener vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
+            _vendorEvent = vendorEventListener;
             _unconsumePurchases = new Stack<UnconsumePurchase>(5);
         }
 

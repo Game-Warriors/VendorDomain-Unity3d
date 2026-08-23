@@ -34,7 +34,7 @@ public static class CreateVendorMarket
                 marketHandler = new AppleHandler();
             }
 #else
-        marketHandler = new WindowsHandler(eventListener, paymentServer);
+        marketHandler = new WindowsHandler(paymentServer);
 #endif
         return marketHandler;
     }

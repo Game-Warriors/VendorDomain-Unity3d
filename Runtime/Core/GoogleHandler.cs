@@ -40,9 +40,8 @@ namespace GameWarriors.VendorDomian.Core
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
 
-        public GoogleHandler(IVendorResourceLoader resourceLoader, IVendorEventListener vendorEventListener)
+        public GoogleHandler(IVendorResourceLoader resourceLoader)
         {
-            _vendorEventListener = vendorEventListener;
             resourceLoader.LoadAsync(Id, OnLoadDone);
         }
 
@@ -58,6 +57,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public async void Initialization(IServiceProvider serviceProvider)
         {
+            IVendorEventListener vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
+            _vendorEventListener = vendorEventListener;
             _storeController = UnityIAPServices.StoreController();
             _storeController.OnPurchasePending += OnPurchasePending;
             _storeController.OnPurchasesFetched += OnPurchasesFetched;
