@@ -27,6 +27,7 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, VendorPurchaseItem> _productsNameTable;
         private Dictionary<string, VendorPurchaseItem> _productsSkuTable;
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
+        private Dictionary<string, PendingOrder> _orderTable;
 
         public string Id => MarketId.GOOGLE;
         public string MarketPackageName => "com.android.vending";
@@ -75,7 +76,7 @@ namespace GameWarriors.VendorDomian.Core
 
         }
 
-        private async System.Threading.Tasks.Task<bool> TryConnecting()
+        private async Task<bool> TryConnecting()
         {
             try
             {
@@ -159,18 +160,19 @@ namespace GameWarriors.VendorDomian.Core
 
         private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
         {
-            foreach (var item in order.CartOrdered.Items())
+            _orderTable ??= new();
+            if (_orderTable.TryAdd(order.Info.TransactionID, order))
             {
-                Product product = item.Product;
-                VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
-                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
-                    (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
-                    order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
+                foreach (var item in order.CartOrdered.Items())
+                {
+                    Product product = item.Product;
+                    VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
+                    _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
+                        (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                        order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
+                }
             }
 
-            // IMPORTANT:
-            // Tell the store that the purchase has been processed.
-            _storeController.ConfirmPurchase(order);
         }
 
         private void OnPurchasesFetched(Orders orders)
@@ -271,6 +273,14 @@ namespace GameWarriors.VendorDomian.Core
             }
 
             _storeController.PurchaseProduct(sku);
+        }
+
+        public void ConfirmPurchase(string transactionId)
+        {
+            if (_orderTable.TryGetValue(transactionId, out var order))
+            {
+                _storeController.ConfirmPurchase(order);
+            }
         }
 
         public VendorPurchaseItem GetProductByName(string id)
