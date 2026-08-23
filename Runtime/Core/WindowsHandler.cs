@@ -40,7 +40,7 @@ namespace GameWarriors.VendorDomian.Core
             resourceLoader.LoadAsync(Id, OnLoadDone);
         }
 
-        private async void OnLoadDone(VendorConfigurationObject resource)
+        private async void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
             {
@@ -130,7 +130,9 @@ namespace GameWarriors.VendorDomian.Core
                 VendorPurchaseItem product = GetProductNameById(item.ItemId);
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
-                    _vendorEvent.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken, default);
+                    _vendorEvent.PurchasedSuccessful(Id, product, "IRR",
+                        (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                        item.PurchaseToken, default, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
                 else
                     _vendorEvent.ConsumeFailed(Id, product, item.PurchaseToken, default);
             }
@@ -150,7 +152,9 @@ namespace GameWarriors.VendorDomian.Core
             //backend.SendDataAsync("",new System.Threading.CancellationToken(),new RequestPurhcaseBindingModel(,sku)
             //Application.OpenURL();
             //_billingService.UserCancelPurchase(payload);
-            _vendorEvent.PurchasedSuccessful(Id, GetProductNameById(sku), "IIR", DateTime.UtcNow.ToBinary(), UnityEngine.Random.Range(1000000, 9000000).ToString(), string.Empty);
+            _vendorEvent.PurchasedSuccessful(Id, GetProductNameById(sku), "IIR", DateTime.UtcNow.ToBinary(),
+                UnityEngine.Random.Range(1000000, 9000000).ToString(), string.Empty,
+                EPurchaseOrigin.FreshPurchase);
         }
         public void SetProdcutSalesOffState(string itemName, bool offState)
         {

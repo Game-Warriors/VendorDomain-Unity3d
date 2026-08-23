@@ -132,7 +132,9 @@ namespace GameWarriors.VendorDomian.Core
                 UnconsumePurchase item = _unconsumePurchases.Pop();
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
-                    _vendorEvent.PurchasedSuccessful(Id, GetProductNameById(item.ItemId), "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken, default);
+                    _vendorEvent.PurchasedSuccessful(Id, GetProductNameById(item.ItemId), "IRR",
+                        (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                        item.PurchaseToken, default, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
             }
         }
 
@@ -141,7 +143,7 @@ namespace GameWarriors.VendorDomian.Core
             _startPurchase(sku, await _paymentServer.GetAuthorizationAsync());
         }
 
-        private async void OnLoadDone(VendorConfigurationObject resource)
+        private async void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
             {
@@ -168,7 +170,9 @@ namespace GameWarriors.VendorDomian.Core
             HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, purhcase.Authority, EMarketProvider.Zarinpal);
             //Debug.Log(httpStatus);
             if (httpStatus == HttpStatusCode.OK)
-                _vendorEvent.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, purhcase.Authority, default);
+                _vendorEvent.PurchasedSuccessful(Id, product, "IRR",
+                    (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                    purhcase.Authority, default, EPurchaseOrigin.FreshPurchase);
             else
                 _vendorEvent.ConsumeFailed(Id, product, purhcase.Authority, default);
         }

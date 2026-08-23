@@ -1,236 +1,369 @@
-﻿using System;
-using UnityEngine;
+using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Data;
+using System;
+using UnityEngine;
 
-
+#if APPLE
 namespace GameWarriors.VendorDomian.Core
 {
-#if APPLE
+    using GameWarriors.VendorDomian.Constants;
+    using GameWarriors.VendorDomian.Enums;
     using System.Collections.Generic;
     using UnityEngine.iOS;
     using UnityEngine.Purchasing;
-    using GameWarriors.VendorDomian.Abstraction;
 
-    public class AppleHandler : IMarketHandler, IStoreListener
+    public sealed class AppleHandler : IMarketHandler
     {
-        // Apple App Store-specific product identifier for the subscription product.
-        private const string kProductNameAppleSubscription = "com.unity3d.subscription.new";
-        // Google Play Store-specific product identifier subscription product.
-        private const string kProductNameGooglePlaySubscription = "com.unity3d.subscription.original";
+        private StoreController _storeController;
+        private IVendorEventListener _vendorEventListener;
+        private Dictionary<string, VendorPurchaseItem> _productsNameTable;
+        private Dictionary<string, VendorPurchaseItem> _productsSkuTable;
+        private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
+        private EStoreSetupState _state;
+        private bool _isFetchingProducts;
 
-        private IStoreController _controller;
-        private IExtensionProvider _extensions;
-
-        private IBillingService _billingService;
-        private Dictionary<string, VendorPurchaseItem> _productsTable;
-
-        public string MarketId => "AppStore";
-        public string VendorPackageName => "itms-apps://";
-        public string VendorLink => "https://apps.apple.com/us/app/clc-ba/id1543807261";
-
-        public int UnconsumePurchaseCount => 0;
-
+        public string Id => MarketId.APPLE;
+        public string MarketPackageName => "itms-apps://";
+        public string VendorLink { get; private set; }
+        public int? UnconsumePurchaseCount { get; private set; }
         public bool HasValidation => false;
+        public bool IsLoading => _productsNameTable == null;
+        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable != null
+            ? _productsNameTable.Values
+            : Array.Empty<VendorPurchaseItem>();
+        public bool IsInitialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
+        bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
+
+        public AppleHandler(IVendorResourceLoader resourceLoader)
+        {
+            resourceLoader.LoadAsync(Id, OnLoadDone);
+        }
+
+        public void StartLoading(IVendorResourceLoader resourceLoader)
+        {
+        }
+
+        public async void Initialization(IServiceProvider serviceProvider)
+        {
+            _vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener
+                ?? throw new InvalidOperationException($"{nameof(IVendorEventListener)} is not registered.");
+            if (_storeController != null)
+                return;
+
+            _storeController = UnityIAPServices.StoreController(AppleAppStore.Name);
+            _storeController.ProcessPendingOrdersOnPurchasesFetched(false);
+            _storeController.OnPurchasePending += OnPurchasePending;
+            _storeController.OnPurchasesFetched += OnPurchasesFetched;
+            _storeController.OnPurchasesFetchFailed += OnPurchasesFetchFailed;
+            _storeController.OnPurchaseFailed += OnPurchaseFailed;
+            _storeController.OnProductsFetched += OnProductsFetched;
+            _storeController.OnProductsFetchFailed += OnProductsFetchFailed;
+            _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
+            _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
+            _storeController.OnStoreConnected += OnStoreConnected;
+
+            await TryConnecting();
+        }
 
         public void Dispose()
         {
-            return;
-        }
-
-        public void Initialization(IBillingService billingService, IPaymentServer paymentServer)
-        {
-            VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("AppleVendorConfig");
-            if (resource == null)
+            if (_storeController == null)
                 return;
-            _productsTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
-            resource.FillItemDic(_productsTable);
-            var builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance(AppStore.AppleAppStore));
-            foreach (var item in _productsTable.Values)
+
+            _storeController.OnPurchasePending -= OnPurchasePending;
+            _storeController.OnPurchasesFetched -= OnPurchasesFetched;
+            _storeController.OnPurchasesFetchFailed -= OnPurchasesFetchFailed;
+            _storeController.OnPurchaseFailed -= OnPurchaseFailed;
+            _storeController.OnProductsFetched -= OnProductsFetched;
+            _storeController.OnProductsFetchFailed -= OnProductsFetchFailed;
+            _storeController.OnPurchaseConfirmed -= OnPurchaseConfirmed;
+            _storeController.OnPurchaseDeferred -= OnPurchaseDeferred;
+            _storeController.OnStoreConnected -= OnStoreConnected;
+            _storeController = null;
+        }
+
+        private async System.Threading.Tasks.Task<bool> TryConnecting()
+        {
+            if (_storeController == null)
+                return false;
+
+            try
             {
-                builder.AddProduct(item.ProductId, ProductType.Consumable);
+                SetState(EStoreSetupState.Initializing);
+                await _storeController.Connect();
+                return true;
             }
-            _billingService = billingService;
-            UnityPurchasing.Initialize(this, builder);
-                        _storeController.RestoreTransactions
+            catch (Exception exception)
+            {
+                SetState(EStoreSetupState.None);
+                _vendorEventListener?.StoreInitializeFailed(Id, exception.ToString());
+                return false;
+            }
         }
 
-        public void RefreshPruchases(string sku)
+        private void OnLoadDone(IVendorConfigurationObject resource)
         {
-            return;
+            if (resource == null)
+            {
+                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                _productsSkuTable = new Dictionary<string, VendorPurchaseItem>();
+                _vendorEventListener?.StoreInitializeFailed(Id, $"The resource for market id {Id} is null.");
+                return;
+            }
+
+            VendorLink = "https://apps.apple.com/" + resource.StoreUrl;
+            _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
+            _productsSkuTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts * 2);
+            for (int i = 0; i < resource.ItemCounts; ++i)
+            {
+                VendorPurchaseItem product = resource.Products[i];
+                _productsNameTable[product.Name] = product;
+                AddSku(product.ProductId, product);
+                AddSku(product.OffProductId, product);
+            }
+
+            if (IsInitialized)
+                RefreshProducts();
         }
 
-        public void OpenPage()
+        private void AddSku(string sku, VendorPurchaseItem product)
         {
-            Application.OpenURL("https://apps.apple.com/us/app/clc-ba/id1543807261");
+            if (!string.IsNullOrEmpty(sku))
+                _productsSkuTable[sku] = product;
         }
 
-        public void RateUs(Action<bool> onRateDone)
+        private void OnStoreConnected()
         {
-            bool result = Device.RequestStoreReview();
-            onRateDone?.Invoke(result);
-            //Application.OpenURL("https://apps.apple.com/us/app/clc-ba/id1543807261");
+            _subscriptionsTable = new Dictionary<string, SubscriptionInfo>();
+            SetState(EStoreSetupState.Initialized);
+            if (_productsNameTable != null)
+                RefreshProducts();
+        }
+
+        public void RefreshProducts()
+        {
+            if (_storeController == null || _productsNameTable == null || _isFetchingProducts)
+                return;
+
+            var products = new List<ProductDefinition>(_productsSkuTable.Count);
+            foreach (KeyValuePair<string, VendorPurchaseItem> entry in _productsSkuTable)
+                products.Add(new ProductDefinition(entry.Key, (ProductType)entry.Value.Type));
+
+            if (products.Count == 0)
+                return;
+
+            _isFetchingProducts = true;
+            _storeController.FetchProductsWithNoRetries(products);
+        }
+
+        public void RefreshPurchases(string sku)
+        {
+            if (_storeController == null)
+                return;
+
+            _storeController.RestoreTransactions((success, error) =>
+            {
+                if (!success)
+                    _vendorEventListener?.OnError(Id, 0, error ?? "Apple purchase restore failed.");
+            });
         }
 
         public void FetchUnconsumePurchases()
         {
-            return;
+            _storeController?.FetchPurchases();
         }
 
         public void ResolveLastUnconsumePurchase()
         {
-            return;
         }
 
-        public void TryBuyProduct(string sku, string payload)
+        public async void TryBuyProduct(string sku, string payload)
         {
-            if (_controller == null || _controller.products == null)
+            VendorPurchaseItem purchaseItem = GetProductNameById(sku);
+            if (_storeController == null)
             {
-                _billingService.PurchasedFailed(0, "products is null , purchaseId:" + sku);
+                _vendorEventListener?.PurchasedFailed(Id, purchaseItem, 0, "Store is not initialized.");
                 return;
             }
-            // ... look up the Product reference with the general product identifier and the Purchasing 
-            // system's products collection.
-            Product product = _controller.products.WithID(sku);
-            // If the look up found a product for this device's store and that product is ready to be sold ... 
-            if (product != null && product.availableToPurchase)
+
+            if (!IsInitialized && !await TryConnecting())
+                return;
+
+            Product product = _storeController.GetProductById(sku);
+            if (product == null)
             {
-                Debug.Log(string.Format("Purchasing product asychronously: {0}", product.definition.id));
-                // ... buy the product. Expect a response either through ProcessPurchase or OnPurchaseFailed 
-                // asynchronously.
-                _controller.InitiatePurchase(product, Guid.NewGuid().ToString());
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem,
+                    (int)PurchaseFailureReason.NotSupported, "Product was not found.");
+                return;
             }
-            // Otherwise ...
-            else
+
+            if (!product.availableToPurchase)
             {
-                // ... report the product look-up failure situation  
-                Debug.Log("BuyProductID: FAIL. Not purchasing product, either is not found or is not available for purchase");
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem,
+                    (int)PurchaseFailureReason.ProductUnavailable, "Product is not available for purchase.");
+                return;
+            }
+
+            _storeController.PurchaseProduct(product);
+        }
+
+        private void OnPurchasePending(PendingOrder order)
+        {
+            ProcessPendingOrder(order, EPurchaseOrigin.FreshPurchase);
+        }
+
+        private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
+        {
+            foreach (CartItem item in order.CartOrdered.Items())
+            {
+                Product product = item.Product;
+                VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
+                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem,
+                    product.metadata.isoCurrencyCode, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
+            }
+
+            _storeController.ConfirmPurchase(order);
+        }
+
+        private void OnPurchaseConfirmed(Order order)
+        {
+            foreach (CartItem item in order.CartOrdered.Items())
+            {
+                Product product = item.Product;
+                VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
+                _vendorEventListener.ConsumeSuccess(Id, purchaseItem,
+                    order.Info.Receipt, order.Info.TransactionID);
             }
         }
 
-        public void OnInitialized(IStoreController controller, IExtensionProvider extensions)
+        private void OnPurchaseDeferred(DeferredOrder order)
         {
-            this._controller = controller;
-            this._extensions = extensions;
-            foreach (var item in controller.products.all)
+            foreach (CartItem item in order.CartOrdered.Items())
             {
-                string sku = item.definition.id;
-                var product = _productsTable[sku];
-                product.SetPrice((float)item.metadata.localizedPrice);
-                _productsTable[sku] = product;
-            }
-
-            _billingService.OnPurchaseItemUpdate(IterateOverPurchaseItem());
-        }
-
-        public void OnInitializeFailed(InitializationFailureReason error)
-        {
-            //Debug.LogError("Google IAP Failed : " + error.ToString());
-            _billingService.OnStoreInitializeFailed();
-        }
-
-        public void OnPurchaseFailed(Product i, PurchaseFailureReason p)
-        {
-            //Debug.Log(p);
-            if (p == PurchaseFailureReason.UserCancelled)
-            {
-                _billingService.UserCancelPurchase("User Cancel");
-            }
-            else
-            {
-                _billingService.OnError(0, $"Apple Purchase Failed Item:{i.definition.id} : " + p.ToString());
+                Product product = item.Product;
+                VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
+                _vendorEventListener.ConsumeFailed(Id, purchaseItem,
+                    order.Info.Receipt, order.Info.TransactionID);
             }
         }
 
-        public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs args)
+        private void OnPurchaseFailed(FailedOrder order)
         {
-            var product = args.purchasedProduct;
-            //Debug.Log(args.purchasedProduct);
-            //Debug.Log(args.purchasedProduct.definition.id);
-            // A consumable product has been purchased by this user.
-            if (product.definition.type == ProductType.Consumable)
+            foreach (CartItem item in order.CartOrdered.Items())
             {
-                Debug.Log(string.Format("ProcessPurchase: PASS. Product: '{0}'", product.definition.id));
-                string productId = product.definition.id;
-                _billingService.PurchasedSuccessful(GetProductNameById(productId), args.purchasedProduct.metadata.isoCurrencyCode, (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, product.transactionID);
-            }
-            // Or ... a non-consumable product has been purchased by this user.
-            else if (product.definition.type == ProductType.NonConsumable)
-            {
-                Debug.Log(string.Format("ProcessPurchase: PASS. Product: '{0}'", args.purchasedProduct.definition.id));
-                // TODO: The non-consumable item has been successfully purchased, grant this item to the player.
-            }
-            // Or ... a subscription product has been purchased by this user.
-            else if (product.definition.type == ProductType.Subscription)
-            {
-                Debug.Log(string.Format("ProcessPurchase: PASS. Product: '{0}'", args.purchasedProduct.definition.id));
-                // TODO: The subscription item has been successfully purchased, grant this to the player.
-            }
-            // Or ... an unknown product has been purchased by this user. Fill in additional products here....
-            else
-            {
-                _billingService.OnError(0, $"Apple Purchase Complete Error Item:{args.purchasedProduct.definition.id}");
-                Debug.Log(string.Format("ProcessPurchase: FAIL. Unrecognized product: '{0}'", args.purchasedProduct.definition.id));
-            }
+                Product product = item.Product;
+                VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
+                if (order.FailureReason == PurchaseFailureReason.UserCancelled)
+                    _vendorEventListener.UserCancelPurchase(Id, purchaseItem, order.Details);
 
-            // Return a flag indicating whether this product has completely been received, or if the application needs 
-            // to be reminded of this purchase at next app launch. Use PurchaseProcessingResult.Pending when still 
-            // saving purchased products to the cloud, and when that save is delayed. 
-            Debug.Log("PurchaseProcessingResult.Complete");
-            return PurchaseProcessingResult.Complete;
-        }
-
-        public void SetProductId(string name, string newId)
-        {
-            if (_productsTable.TryGetValue(name, out var item))
-            {
-                item.SetId(newId);
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem,
+                    (int)order.FailureReason, order.Details);
             }
         }
 
-        public VendorPurchaseItem GetProductByName(string id)
+        private void OnProductsFetched(List<Product> products)
         {
-            if (_productsTable.TryGetValue(id, out var item))
+            _isFetchingProducts = false;
+            foreach (Product item in products)
             {
+                if (_productsSkuTable.TryGetValue(item.definition.id, out VendorPurchaseItem product))
+                {
+                    product.SetPrice((float)item.metadata.localizedPrice);
+                    product.SetMetaData(new GoogeProductMeta(item.metadata));
+                }
+            }
+
+            SetState(EStoreSetupState.FetchProducts);
+            _vendorEventListener.OnPurchaseItemsUpdate(Id);
+            _storeController.FetchPurchases();
+        }
+
+        private void OnProductsFetchFailed(ProductFetchFailed failure)
+        {
+            _isFetchingProducts = false;
+            _vendorEventListener?.OnError(Id, 0, failure.ToString());
+        }
+
+        private void OnPurchasesFetched(Orders orders)
+        {
+            UnconsumePurchaseCount = orders.PendingOrders.Count;
+            foreach (PendingOrder order in orders.PendingOrders)
+                ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
+
+            _subscriptionsTable.Clear();
+            foreach (ConfirmedOrder order in orders.ConfirmedOrders)
+            {
+                foreach (var productInfo in order.Info.PurchasedProductInfo)
+                {
+                    if (productInfo.subscriptionInfo != null)
+                        _subscriptionsTable[productInfo.productId] = productInfo.subscriptionInfo;
+                }
+            }
+
+            SetState(EStoreSetupState.FetchPurchases);
+            _vendorEventListener.OnSubscriptionsUpdate(Id);
+        }
+
+        private void OnPurchasesFetchFailed(PurchasesFetchFailureDescription failure)
+        {
+            _vendorEventListener?.OnError(Id, 0, failure.ToString());
+        }
+
+        public VendorPurchaseItem GetProductByName(string itemName)
+        {
+            if (_productsNameTable != null && _productsNameTable.TryGetValue(itemName, out VendorPurchaseItem item))
                 return item;
-            }
             return default;
         }
 
         public VendorPurchaseItem GetProductNameById(string productId)
         {
-            foreach (var item in _productsTable.Values)
-            {
-                if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
-                    return item;
-            }
+            if (_productsSkuTable != null && !string.IsNullOrEmpty(productId) &&
+                _productsSkuTable.TryGetValue(productId, out VendorPurchaseItem item))
+                return item;
             return default;
         }
 
-        private IEnumerable<VendorPurchaseItem> IterateOverPurchaseItem()
+        public ISubscriptionInfo GetSubscriptionInfoByName(string itemName)
         {
-            foreach (VendorPurchaseItem item in _productsTable.Values)
-            {
-                yield return item;
-            }
+            VendorPurchaseItem item = GetProductByName(itemName);
+            if (item != null && _subscriptionsTable != null &&
+                _subscriptionsTable.TryGetValue(item.ProductId, out SubscriptionInfo info))
+                return new SubscriptionData(info.GetExpireDate());
+            return null;
         }
 
         public void SetProdcutSalesOffState(string itemName, bool offState)
         {
-            if (_productsTable.ContainsKey(itemName))
-            {
-                var item = _productsTable[itemName];
+            if (_productsNameTable != null && _productsNameTable.TryGetValue(itemName, out VendorPurchaseItem item))
                 item.SetOffState(offState);
-            }
         }
 
         public void SetAllProdcutSalesOffState(bool state)
         {
-            foreach (var item in _productsTable.Values)
-            {
+            if (_productsNameTable == null)
+                return;
+            foreach (VendorPurchaseItem item in _productsNameTable.Values)
                 item.SetOffState(state);
-            }
         }
 
+        public void OpenPage()
+        {
+            Application.OpenURL(VendorLink);
+        }
+
+        public void RateUs(Action<bool> onRateDone)
+        {
+            onRateDone?.Invoke(Device.RequestStoreReview());
+        }
+
+        private void SetState(EStoreSetupState state)
+        {
+            _state = state;
+            _vendorEventListener?.OnVendorStateChanged(Id, state);
+        }
     }
-#endif
 }
+#endif

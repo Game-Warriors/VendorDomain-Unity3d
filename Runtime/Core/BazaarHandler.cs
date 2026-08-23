@@ -31,11 +31,16 @@ using BazaarPlugin;
             _vendorEventHandler = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
             IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
 
-            VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("BazaarVendorConfig");
+            IVendorResourceLoader resourceLoader = serviceProvider.GetService(typeof(IVendorResourceLoader)) as IVendorResourceLoader;
+            IVendorConfigurationObject resource = resourceLoader?.Load("Bazaar");
             if (resource == null)
                 return;
             _productsTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
-            resource.FillItemDic(_productsTable);
+            for (int i = 0; i < resource.ItemCounts; ++i)
+            {
+                VendorPurchaseItem product = resource.Products[i];
+                _productsTable.Add(product.Name, product);
+            }
 
             IABEventManager.billingNotSupportedEvent += BazaarNotSupport;
             IABEventManager.purchaseSucceededEvent += PurchaseSuccess;

@@ -34,7 +34,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public IEnumerable<IPurchaseItemMeta> PurchaseItemsMeta => throw new NotImplementedException();
 
-        private async void OnLoadDone(VendorConfigurationObject resource)
+        private async void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
             {
@@ -118,7 +118,9 @@ namespace GameWarriors.VendorDomian.Core
                 VendorPurchaseItem product = GetProductNameById(item.ItemId);
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
-                    _eventListener.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, item.PurchaseToken, default);
+                    _eventListener.PurchasedSuccessful(Id, product, "IRR",
+                        (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                        item.PurchaseToken, default, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
                 else
                     _eventListener.ConsumeFailed(Id, product, item.ItemId, item.PurchaseToken);
             }
@@ -193,7 +195,9 @@ namespace GameWarriors.VendorDomian.Core
             VendorPurchaseItem product = GetProductNameById(purchase.Sku);
             HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, purchase.Authority, EMarketProvider.Zarinpal);
             if (httpStatus == HttpStatusCode.OK)
-                _eventListener.PurchasedSuccessful(Id, product, "IRR", (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, purchase.Authority, default);
+                _eventListener.PurchasedSuccessful(Id, product, "IRR",
+                    (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                    purchase.Authority, default, EPurchaseOrigin.FreshPurchase);
             else
                 _eventListener.ConsumeFailed(Id, product, purchase.Sku, purchase.Authority);
         }

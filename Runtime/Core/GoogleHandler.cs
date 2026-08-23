@@ -60,6 +60,7 @@ namespace GameWarriors.VendorDomian.Core
             IVendorEventListener vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             _vendorEventListener = vendorEventListener;
             _storeController = UnityIAPServices.StoreController();
+            _storeController.ProcessPendingOrdersOnPurchasesFetched(false);
             _storeController.OnPurchasePending += OnPurchasePending;
             _storeController.OnPurchasesFetched += OnPurchasesFetched;
             _storeController.OnPurchaseFailed += OnPurchaseFailed;
@@ -78,12 +79,12 @@ namespace GameWarriors.VendorDomian.Core
         {
             try
             {
-                _state = EStoreSetupState.Initializing;
+                SetState(EStoreSetupState.Initializing);
                 await _storeController.Connect();
             }
             catch (Exception e)
             {
-                _state = EStoreSetupState.None;
+                SetState(EStoreSetupState.None);
                 _vendorEventListener.StoreInitializeFailed(Id, e.ToString());
                 return false;
             }
@@ -91,7 +92,7 @@ namespace GameWarriors.VendorDomian.Core
             return true;
         }
 
-        private async void OnLoadDone(VendorConfigurationObject resource)
+        private async void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
             {
@@ -153,12 +154,18 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchasePending(PendingOrder order)
         {
+            ProcessPendingOrder(order, EPurchaseOrigin.FreshPurchase);
+        }
+
+        private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
+        {
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
                 VendorPurchaseItem purchaseItem = GetProductNameById(product.definition.id);
                 _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
-                    (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds, order.Info.Receipt, order.Info.TransactionID);
+                    (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                    order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
             }
 
             // IMPORTANT:
@@ -169,6 +176,9 @@ namespace GameWarriors.VendorDomian.Core
         private void OnPurchasesFetched(Orders orders)
         {
             UnconsumePurchaseCount = orders.PendingOrders.Count;
+            foreach (PendingOrder order in orders.PendingOrders)
+                ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
+
             _subscriptionsTable.Clear();
             foreach (var order in orders.ConfirmedOrders)
             {
@@ -179,12 +189,13 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
 
+            SetState(EStoreSetupState.FetchPurchases);
             _vendorEventListener.OnSubscriptionsUpdate(Id);
         }
 
         private void StoreConnected()
         {
-            _state = EStoreSetupState.Initialized;
+            SetState(EStoreSetupState.Initialized);
             _subscriptionsTable = new Dictionary<string, SubscriptionInfo>();
             RefreshProducts();
         }
@@ -321,6 +332,7 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
 
+            SetState(EStoreSetupState.FetchProducts);
             _vendorEventListener.OnPurchaseItemsUpdate(Id);
             _storeController.FetchPurchases();
         }
@@ -328,6 +340,12 @@ namespace GameWarriors.VendorDomian.Core
         private void OnProductsFetchFailed(ProductFetchFailed failed)
         {
             _isFetchingProducts = false;
+        }
+
+        private void SetState(EStoreSetupState state)
+        {
+            _state = state;
+            _vendorEventListener?.OnVendorStateChanged(Id, state);
         }
     }
 }

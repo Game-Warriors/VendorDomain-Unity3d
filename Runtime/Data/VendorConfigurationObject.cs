@@ -1,26 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using GameWarriors.VendorDomian.Abstraction;
 using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Data
 {
-    public class VendorConfigurationObject : ScriptableObject
+    public class VendorConfigurationObject : ScriptableObject, IVendorConfigurationObject
     {
+        [SerializeField]
+        private string _marketPackUrl;
         [SerializeField]
         private VendorPurchaseItem[] _products;
 
-        public VendorConfigurationObject(VendorPurchaseItem[] products)
-        {
-            _products = products;
-        }
-
         public VendorPurchaseItem[] Products => _products;
-
+        public string StoreUrl => _marketPackUrl;
         public int ItemCounts => _products?.Length ?? 0;
 
         public void SetProducts(VendorPurchaseItem[] products)
         {
             _products = products;
+        }
+
+        public void SetMarketPackUrl(string marketPackUrl)
+        {
+            _marketPackUrl = marketPackUrl;
         }
 
         public void FillItemDic(Dictionary<string, VendorPurchaseItem> productsTable)
