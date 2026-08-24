@@ -116,7 +116,7 @@ namespace GameWarriors.VendorDomian.Core
             }
             _productsNameTable = new(resource.ItemCounts);
             _productsSkuTable = new(resource.ItemCounts);
-            int length = resource.ItemCounts;
+
             foreach (IProductItem product in resource.Products)
             {
                 _productsNameTable.Add(product.Name, product);
@@ -126,6 +126,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseDeferred(DeferredOrder order)
         {
+            _orderTable.Remove(order.Info.TransactionID, out _);
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -176,7 +177,6 @@ namespace GameWarriors.VendorDomian.Core
                     else if (order.FailureReason == PurchaseFailureReason.UserCancelled)
                         _vendorEventListener.UserCancelPurchase(Id, purchaseItem, order.Details);
                     _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)order.FailureReason, order.Details);
-
                 }
             }
         }
