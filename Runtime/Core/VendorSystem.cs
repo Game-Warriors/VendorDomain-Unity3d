@@ -184,5 +184,10 @@ namespace GameWarriors.VendorDomian.Core
         {
             return _defaultMarket?.GetSubscriptionInfoByName(itemName);
         }
+
+        public bool ConsumePurchase(string transactionId)
+        {
+            return _defaultMarket.ConsumePurchase(transactionId);
+        }
     }
 }

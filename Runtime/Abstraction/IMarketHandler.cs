@@ -24,7 +24,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         void OpenPage();
         void RateUs(Action<bool> rateDone);
         void FetchUnconsumePurchases();
-        void ConsumePurchase(string transactionId);
+        bool ConsumePurchase(string transactionId);
         void TryBuyProduct(string sku, string payload);
         void RefreshProducts();
         void RefreshPurchases(string sku);

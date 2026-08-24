@@ -260,9 +260,9 @@ namespace GameWarriors.VendorDomian.Core
             throw new NotSupportedException();
         }
 
-        public void ConsumePurchase(string transactionId)
+        public bool ConsumePurchase(string transactionId)
         {
-
+            return true;
         }
     }
 }

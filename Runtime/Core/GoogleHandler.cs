@@ -189,18 +189,15 @@ namespace GameWarriors.VendorDomian.Core
         private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
         {
             _orderTable ??= new();
-            if (_orderTable.TryAdd(order.Info.TransactionID, order))
+            _orderTable.TryAdd(order.Info.TransactionID, order);
+            foreach (var item in order.CartOrdered.Items())
             {
-                foreach (var item in order.CartOrdered.Items())
-                {
-                    Product product = item.Product;
-                    IProductItem purchaseItem = GetProductNameById(product.definition.id);
-                    _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
-                        (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
-                        order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
-                }
+                Product product = item.Product;
+                IProductItem purchaseItem = GetProductNameById(product.definition.id);
+                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
+                    (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
+                    order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
             }
-
         }
 
         private void OnPurchasesFetched(Orders orders)
@@ -298,12 +295,14 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.PurchaseProduct(sku);
         }
 
-        public void ConsumePurchase(string transactionId)
+        public bool ConsumePurchase(string transactionId)
         {
             if (_orderTable.Remove(transactionId, out var order))
             {
                 _storeController.ConfirmPurchase(order);
+                return true;
             }
+            return false;
         }
 
         public IProductItem GetProductByName(string id)

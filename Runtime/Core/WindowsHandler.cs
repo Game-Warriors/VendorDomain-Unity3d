@@ -193,9 +193,9 @@ namespace GameWarriors.VendorDomian.Core
             return default;
         }
 
-        public void ConsumePurchase(string transactionId)
+        public bool ConsumePurchase(string transactionId)
         {
-
+            return true;
         }
     }
 }

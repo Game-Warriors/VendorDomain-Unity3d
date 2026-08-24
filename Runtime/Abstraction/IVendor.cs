@@ -11,6 +11,7 @@ namespace GameWarriors.VendorDomian.Abstraction
 
         void ChangeDefaultMarket(string newDefault);
         void PurchaseProduct(string packName, bool hasOff);
+        bool ConsumePurchase(string transactionId);
         void OpenVendorLocation();
         void OpenRate(Action<bool> onDone);
         void RefreshProducts();
