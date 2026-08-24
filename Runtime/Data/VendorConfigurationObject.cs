@@ -15,6 +15,8 @@ namespace GameWarriors.VendorDomian.Data
         public string StoreUrl => _marketPackUrl;
         public int ItemCounts => _products?.Length ?? 0;
 
+        IEnumerable<IProductItem> IVendorConfigurationObject.Products => Products;
+
         public void SetProducts(VendorPurchaseItem[] products)
         {
             _products = products;

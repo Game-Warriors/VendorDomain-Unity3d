@@ -1,12 +1,13 @@
 ﻿using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Enums;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Data
 {
     [Serializable]
-    public class VendorPurchaseItem
+    public class VendorPurchaseItem : IProductItem
     {
         [SerializeField]
         private string _name;
@@ -39,6 +40,9 @@ namespace GameWarriors.VendorDomian.Data
         public int PurchaseLimit => _purchaseLimit;
         public bool EnableState => _isEnable;
 
+        string IProductItem.Id => _productId;
+
+        IEnumerable<IProductCurrencyItem> IProductItem.CurrenciesData => CurrenciesData;
 
         public void SetOffState(bool state)
         {

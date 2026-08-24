@@ -7,9 +7,9 @@ namespace GameWarriors.VendorDomian.Abstraction
     {
         string MarketId { get; }
         bool IsValidate { get; }
-        IEnumerable<VendorPurchaseItem> PurchaseItems { get; }
-        (float, VendorCurrencyItem[]) GetProducePriceAndData(string key);
-        VendorCurrencyItem[] GetCurrencyByPurchaseId(string purchaseId);
+        IEnumerable<IProductItem> PurchaseItems { get; }
+        (float, IEnumerable<IProductCurrencyItem>) GetProducePriceAndData(string key);
+        IEnumerable<IProductCurrencyItem> GetCurrencyByPurchaseId(string purchaseId);
         ISubscriptionInfo GetSubscriptionInfo(string itemName);
         void EnableProductOffState(string itemName);
         void DisableAllProductOffState();

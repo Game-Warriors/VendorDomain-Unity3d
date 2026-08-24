@@ -1,5 +1,4 @@
 ﻿using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,7 +17,7 @@ namespace GameWarriors.VendorDomian.Core
         public string MarketId => _defaultMarket?.Id;
         public bool IsValidate => _defaultMarket.HasValidation;
 
-        IEnumerable<VendorPurchaseItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
+        IEnumerable<IProductItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
 
         public bool IsInitialized => _defaultMarket.IsInitialized;
 
@@ -130,8 +129,8 @@ namespace GameWarriors.VendorDomian.Core
         void IVendor.PurchaseProduct(string packName, bool hasOff)
         {
             selectedId = packName;
-            VendorPurchaseItem product = _defaultMarket.GetProductByName(packName);
-            string productId = hasOff && product.HasOff ? product.OffProductId : product.ProductId;
+            IProductItem product = _defaultMarket.GetProductByName(packName);
+            string productId = hasOff && product.HasOff ? product.OffProductId : product.Id;
             _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());
         }
 
@@ -158,13 +157,13 @@ namespace GameWarriors.VendorDomian.Core
             _defaultMarket?.RefreshProducts();
         }
 
-        (float, VendorCurrencyItem[]) IDefaultVendorData.GetProducePriceAndData(string key)
+        (float, IEnumerable<IProductCurrencyItem>) IDefaultVendorData.GetProducePriceAndData(string key)
         {
             var item = _defaultMarket.GetProductByName(key);
             return (item.Price, item.CurrenciesData);
         }
 
-        VendorCurrencyItem[] IDefaultVendorData.GetCurrencyByPurchaseId(string purchaseId)
+        IEnumerable<IProductCurrencyItem> IDefaultVendorData.GetCurrencyByPurchaseId(string purchaseId)
         {
             var item = _defaultMarket.GetProductNameById(purchaseId);
             return item.CurrenciesData;
@@ -179,18 +178,6 @@ namespace GameWarriors.VendorDomian.Core
         void IDefaultVendorData.DisableAllProductOffState()
         {
             _defaultMarket.SetAllProdcutSalesOffState(false);
-        }
-
-        public void ResolveLastUnconsumePurchase()
-        {
-            if (Application.internetReachability == NetworkReachability.NotReachable || _marketTable == null)
-            {
-                //_purchaseHandler.OnItemNotPurchase();
-            }
-            else
-            {
-                _defaultMarket?.ResolveLastUnconsumePurchase();
-            }
         }
 
         ISubscriptionInfo IDefaultVendorData.GetSubscriptionInfo(string itemName)

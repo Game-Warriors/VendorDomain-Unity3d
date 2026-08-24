@@ -1,3 +1,6 @@
+    version : 0.1.9
+    reimplement pending purchase structure. break dependency to VendorPurchaseItem class to other abstraction dependency.
+
     version : 0.1.8
     refactor Apple IAP handler for Unity Purchasing 5.4.2, fix Google store state notifications, add market package URL editing, decouple handlers from the concrete vendor configuration asset, and identify fresh and recovered unconfirmed purchases
 

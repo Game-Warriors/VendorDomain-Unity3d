@@ -1,5 +1,4 @@
-﻿using GameWarriors.VendorDomian.Data;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace GameWarriors.VendorDomian.Abstraction
@@ -15,7 +14,8 @@ namespace GameWarriors.VendorDomian.Abstraction
         string VendorLink { get; }
         int? UnconsumePurchaseCount { get; }
         bool HasValidation { get; }
-        IEnumerable<VendorPurchaseItem> PurchaseItems { get; }
+        IEnumerable<IProductItem> PurchaseItems { get; }
+        IEnumerable<IPendingPurchaseItem> PendingPurchaseItems { get; }
         bool IsProductFetched { get; }
         bool IsPurchasesFetched { get; }
 
@@ -24,13 +24,13 @@ namespace GameWarriors.VendorDomian.Abstraction
         void OpenPage();
         void RateUs(Action<bool> rateDone);
         void FetchUnconsumePurchases();
-        void ResolveLastUnconsumePurchase();
+        void ConsumePurchase(string transactionId);
         void TryBuyProduct(string sku, string payload);
         void RefreshProducts();
         void RefreshPurchases(string sku);
         void Dispose();
-        VendorPurchaseItem GetProductByName(string itemName);
-        VendorPurchaseItem GetProductNameById(string productId);
+        IProductItem GetProductByName(string itemName);
+        IProductItem GetProductNameById(string productId);
         ISubscriptionInfo GetSubscriptionInfoByName(string itemName);
         void SetProdcutSalesOffState(string itemName, bool offState);
         void SetAllProdcutSalesOffState(bool state);

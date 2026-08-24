@@ -16,7 +16,7 @@ namespace GameWarriors.VendorDomian.Core
         private AndroidJavaClass _zarinpalActivity;
         private IVendorEventListener _eventListener;
         private IPaymentServer _paymentServer;
-        private Dictionary<string, VendorPurchaseItem> _productsNameTable;
+        private Dictionary<string, IProductItem> _productsNameTable;
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
         private EStoreSetupState _state;
@@ -30,23 +30,22 @@ namespace GameWarriors.VendorDomian.Core
         public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
         public bool HasValidation => false;
         public bool IsLoading => _productsNameTable == null;
-        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
+        public IEnumerable<IProductItem> PurchaseItems => _productsNameTable.Values;
 
-        public IEnumerable<IPurchaseItemMeta> PurchaseItemsMeta => throw new NotImplementedException();
+        public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems => new IPendingPurchaseItem[0];
 
         private async void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
             {
-                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                _productsNameTable = new Dictionary<string, IProductItem>();
                 throw new ArgumentNullException($"the resource for market id {Id} in null");
             }
-            _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
+            _productsNameTable = new Dictionary<string, IProductItem>(resource.ItemCounts);
 
             int length = resource.ItemCounts;
-            for (int i = 0; i < length; ++i)
+            foreach (IProductItem product in resource.Products)
             {
-                VendorPurchaseItem product = resource.Products[i];
                 _productsNameTable.Add(product.Name, product);
             }
         }
@@ -115,7 +114,7 @@ namespace GameWarriors.VendorDomian.Core
             if (_unconsumePurchases.Count > 0)
             {
                 UnconsumePurchase item = _unconsumePurchases.Pop();
-                VendorPurchaseItem product = GetProductNameById(item.ItemId);
+                IProductItem product = GetProductNameById(item.ItemId);
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
                     _eventListener.PurchasedSuccessful(Id, product, "IRR",
@@ -162,7 +161,7 @@ namespace GameWarriors.VendorDomian.Core
             Debug.Log("Dispose");
         }
 
-        public VendorPurchaseItem GetProductByName(string id)
+        public IProductItem GetProductByName(string id)
         {
             if (_productsNameTable.TryGetValue(id, out var item))
             {
@@ -171,11 +170,11 @@ namespace GameWarriors.VendorDomian.Core
             return default;
         }
 
-        public VendorPurchaseItem GetProductNameById(string productId)
+        public IProductItem GetProductNameById(string productId)
         {
             foreach (var item in _productsNameTable.Values)
             {
-                if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
+                if (string.Compare(item.Id, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
                     return item;
             }
             return default;
@@ -192,7 +191,7 @@ namespace GameWarriors.VendorDomian.Core
             Debug.Log("Success Purhcase:" + data);
 #endif
             ZarinSuccessPurchase purchase = JsonUtility.FromJson<ZarinSuccessPurchase>(data);
-            VendorPurchaseItem product = GetProductNameById(purchase.Sku);
+            IProductItem product = GetProductNameById(purchase.Sku);
             HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, purchase.Authority, EMarketProvider.Zarinpal);
             if (httpStatus == HttpStatusCode.OK)
                 _eventListener.PurchasedSuccessful(Id, product, "IRR",
@@ -210,7 +209,7 @@ namespace GameWarriors.VendorDomian.Core
                 Debug.Log("OnPurchaseCancel sku: " + sku);
 #endif
             }
-            VendorPurchaseItem product = GetProductNameById(sku);
+            IProductItem product = GetProductNameById(sku);
             _eventListener.UserCancelPurchase(Id, product, "Zarrinpal purhcase cancel sku : " + sku);
         }
 
@@ -230,7 +229,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnStartPurchaseCancel(string sku)
         {
-            VendorPurchaseItem product = GetProductNameById(sku);
+            IProductItem product = GetProductNameById(sku);
             _eventListener.UserCancelPurchase(Id, product, "Zarrinpal Start purhcase cancel Sku: " + sku);
         }
 
@@ -259,6 +258,11 @@ namespace GameWarriors.VendorDomian.Core
         public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
         {
             throw new NotSupportedException();
+        }
+
+        public void ConsumePurchase(string transactionId)
+        {
+
         }
     }
 }

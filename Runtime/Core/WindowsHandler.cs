@@ -17,7 +17,7 @@ namespace GameWarriors.VendorDomian.Core
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
         private EStoreSetupState _state;
-        private Dictionary<string, VendorPurchaseItem> _productsNameTable;
+        private Dictionary<string, IProductItem> _productsNameTable;
 
         public string Id => MarketId.WINDOWS;
         public string MarketPackageName => string.Empty;
@@ -28,7 +28,9 @@ namespace GameWarriors.VendorDomian.Core
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
         public bool IsLoading => _productsNameTable == null;
-        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
+        public IEnumerable<IProductItem> PurchaseItems => _productsNameTable.Values;
+
+        public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems => new IPendingPurchaseItem[0];
 
         public WindowsHandler(IPaymentServer paymentServer)
         {
@@ -44,15 +46,14 @@ namespace GameWarriors.VendorDomian.Core
         {
             if (resource == null)
             {
-                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                _productsNameTable = new Dictionary<string, IProductItem>();
                 throw new ArgumentNullException($"the resource for market id {Id} in null");
             }
-            _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
+            _productsNameTable = new Dictionary<string, IProductItem>(resource.ItemCounts);
 
             int length = resource.ItemCounts;
-            for (int i = 0; i < length; ++i)
+            foreach (IProductItem product in resource.Products)
             {
-                VendorPurchaseItem product = resource.Products[i];
                 _productsNameTable.Add(product.Name, product);
             }
             _state = EStoreSetupState.FetchPurchases;
@@ -81,17 +82,17 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-        public VendorPurchaseItem GetProductNameById(string productId)
+        public IProductItem GetProductNameById(string productId)
         {
             foreach (var item in _productsNameTable.Values)
             {
-                if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
+                if (string.Compare(item.Id, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
                     return item;
             }
             return default;
         }
 
-        public VendorPurchaseItem GetProductByName(string id)
+        public IProductItem GetProductByName(string id)
         {
             return _productsNameTable[id];
         }
@@ -127,7 +128,7 @@ namespace GameWarriors.VendorDomian.Core
             if (_unconsumePurchases.Count > 0)
             {
                 UnconsumePurchase item = _unconsumePurchases.Pop();
-                VendorPurchaseItem product = GetProductNameById(item.ItemId);
+                IProductItem product = GetProductNameById(item.ItemId);
                 HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, item.PurchaseToken, EMarketProvider.Zarinpal);
                 if (httpStatus == HttpStatusCode.OK)
                     _vendorEvent.PurchasedSuccessful(Id, product, "IRR",
@@ -184,12 +185,17 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshProducts()
         {
-            
+
         }
 
         public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
         {
-            throw new NotSupportedException();
+            return default;
+        }
+
+        public void ConsumePurchase(string transactionId)
+        {
+
         }
     }
 }

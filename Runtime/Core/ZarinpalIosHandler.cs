@@ -4,8 +4,6 @@ using System.Net;
 using UnityEngine;
 using GameWarriors.VendorDomian.Abstraction;
 using GameWarriors.VendorDomian.Data;
-using System.Threading.Tasks;
-using System.Collections;
 using GameWarriors.VendorDomian.Enums;
 
 
@@ -37,14 +35,18 @@ namespace GameWarriors.VendorDomian.Core
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
         public bool IsLoading => _productsNameTable == null;
 
-        private Dictionary<string, VendorPurchaseItem> _productsNameTable;
+        private Dictionary<string, IProductItem> _productsNameTable;
         private Stack<UnconsumePurchase> _unconsumePurchases;
         private bool _isFetchingUnconsume;
-        public IEnumerable<VendorPurchaseItem> PurchaseItems => _productsNameTable.Values;
+        public IEnumerable<IProductItem> PurchaseItems => _productsNameTable.Values;
 
         public bool IsProductFetched => throw new NotImplementedException();
 
         public bool IsPurchasesFetched => throw new NotImplementedException();
+
+        IEnumerable<IProductItem> IMarketHandler.PurchaseItems => PurchaseItems;
+
+        public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems => throw new NotSupportedException();
 
         public void Initialization(IServiceProvider serviceProvider)
         {
@@ -68,7 +70,7 @@ namespace GameWarriors.VendorDomian.Core
 
         }
 
-        public VendorPurchaseItem GetProductByName(string id)
+        public IProductItem GetProductByName(string id)
         {
             if (_productsNameTable.TryGetValue(id, out var item))
             {
@@ -77,11 +79,11 @@ namespace GameWarriors.VendorDomian.Core
             return default;
         }
 
-        public VendorPurchaseItem GetProductNameById(string productId)
+        public IProductItem GetProductNameById(string productId)
         {
             foreach (var item in _productsNameTable.Values)
             {
-                if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
+                if (string.Compare(item.Id, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
                     return item;
             }
             return default;
@@ -147,15 +149,14 @@ namespace GameWarriors.VendorDomian.Core
         {
             if (resource == null)
             {
-                _productsNameTable = new Dictionary<string, VendorPurchaseItem>();
+                _productsNameTable = new Dictionary<string, IProductItem>();
                 throw new ArgumentNullException($"the resource for market id {Id} in null");
             }
-            _productsNameTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
+            _productsNameTable = new Dictionary<string, IProductItem>(resource.ItemCounts);
 
             int length = resource.ItemCounts;
-            for (int i = 0; i < length; ++i)
+            foreach (IProductItem product in resource.Products)
             {
-                VendorPurchaseItem product = resource.Products[i];
                 _productsNameTable.Add(product.Name, product);
             }
         }
@@ -166,7 +167,7 @@ namespace GameWarriors.VendorDomian.Core
             Debug.Log("Success Purhcase:" + data);
 #endif
             ZarinSuccessPurchase purhcase = JsonUtility.FromJson<ZarinSuccessPurchase>(data);
-            VendorPurchaseItem product = GetProductNameById(purhcase.Sku);
+            IProductItem product = GetProductNameById(purhcase.Sku);
             HttpStatusCode httpStatus = await _paymentServer.TryToConsumePayment(Application.identifier, purhcase.Authority, EMarketProvider.Zarinpal);
             //Debug.Log(httpStatus);
             if (httpStatus == HttpStatusCode.OK)
@@ -185,7 +186,7 @@ namespace GameWarriors.VendorDomian.Core
                 Debug.Log("OnPurchaseCancel sku: " + sku);
 #endif
             }
-            VendorPurchaseItem product = GetProductNameById(sku);
+            IProductItem product = GetProductNameById(sku);
             _vendorEvent.UserCancelPurchase(Id, product, "Zarrinpal purhcase cancle order : " + sku);
         }
 
@@ -205,7 +206,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnStartPurchaseCancel(string sku)
         {
-            VendorPurchaseItem product = GetProductNameById(sku);
+            IProductItem product = GetProductNameById(sku);
             _vendorEvent.UserCancelPurchase(Id, product, "Zarrinpal Start purhcase cancle Sku: " + sku);
         }
 
@@ -236,10 +237,15 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshProducts()
         {
-            
+
         }
 
         public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
+        {
+            throw new NotSupportedException();
+        }
+
+        public void ConsumePurchase(string transactionId)
         {
             throw new NotSupportedException();
         }
