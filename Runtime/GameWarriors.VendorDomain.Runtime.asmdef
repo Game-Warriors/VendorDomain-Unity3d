@@ -2,7 +2,8 @@
     "name": "GameWarriors.VendorDomain.Runtime",
     "rootNamespace": "",
     "references": [
-        "GUID:60bfecf5cb232594891bc622f40d6bed"
+        "GUID:60bfecf5cb232594891bc622f40d6bed",
+        "GUID:636af3bc0e46e514c99d928144d9434f"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

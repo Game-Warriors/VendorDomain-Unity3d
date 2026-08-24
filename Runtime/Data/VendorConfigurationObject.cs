@@ -7,6 +7,8 @@ namespace GameWarriors.VendorDomian.Data
     public class VendorConfigurationObject : ScriptableObject, IVendorConfigurationObject
     {
         [SerializeField]
+        private string _storeKey;
+        [SerializeField]
         private string _marketPackUrl;
         [SerializeField]
         private VendorPurchaseItem[] _products;
@@ -16,6 +18,8 @@ namespace GameWarriors.VendorDomian.Data
         public int ItemCounts => _products?.Length ?? 0;
 
         IEnumerable<IProductItem> IVendorConfigurationObject.Products => Products;
+
+        public string StoreKey => _storeKey;
 
         public void SetProducts(VendorPurchaseItem[] products)
         {

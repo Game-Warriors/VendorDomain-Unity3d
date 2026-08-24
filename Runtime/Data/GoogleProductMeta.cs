@@ -3,7 +3,8 @@ using UnityEngine.Purchasing;
 
 namespace GameWarriors.VendorDomian.Data
 {
-    public class GoogeProductMeta : IPurchaseItemMeta
+#if GOOGLE
+    public class GoogleProductMeta : IPurchaseItemMeta
     {
         private readonly ProductMetadata _metadata;
 
@@ -13,9 +14,10 @@ namespace GameWarriors.VendorDomian.Data
         public decimal Price => _metadata.localizedPrice;
         public string CurrencyCode => _metadata.isoCurrencyCode;
 
-        public GoogeProductMeta(ProductMetadata metadata)
+        public GoogleProductMeta(ProductMetadata metadata)
         {
             _metadata = metadata;
         }
     }
+#endif
 }

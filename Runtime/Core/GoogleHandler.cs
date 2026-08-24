@@ -69,7 +69,7 @@ namespace GameWarriors.VendorDomian.Core
             return;
         }
 
-        public async void Initialization(IServiceProvider serviceProvider)
+        public void Initialization(IServiceProvider serviceProvider)
         {
             IVendorEventListener vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             _vendorEventListener = vendorEventListener;
@@ -85,7 +85,7 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnStoreConnected += StoreConnected;
 
             //_storeController.ProcessPendingOrdersOnPurchasesFetched
-            await TryConnecting();
+            _ = TryConnecting();
 
         }
 

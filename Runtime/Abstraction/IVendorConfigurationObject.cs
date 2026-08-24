@@ -7,5 +7,6 @@ namespace GameWarriors.VendorDomian.Abstraction
         IEnumerable<IProductItem> Products { get; }
         string StoreUrl { get; }
         int ItemCounts { get; }
+        string StoreKey { get; }
     }
 }
