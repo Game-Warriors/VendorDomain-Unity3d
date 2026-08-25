@@ -1,3 +1,6 @@
+    version : 0.2.2
+    import new popoolakey sdk and setup, develop bazaar handler.
+
     version : 0.2.1
     fix duplicate purchase bug.
 

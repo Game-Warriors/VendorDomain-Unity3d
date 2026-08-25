@@ -5,7 +5,6 @@ using GameWarriors.VendorDomian.Enums;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Purchasing;
 
 
 namespace GameWarriors.VendorDomian.Core
@@ -22,7 +21,7 @@ namespace GameWarriors.VendorDomian.Core
         private string _key;
         private bool _isFetchingProducts;
         private EStoreSetupState _state;
-        private Payment _payment;
+        private Payment _storeController;
         private IVendorEventListener _vendorEventListener;
         private Dictionary<string, IProductItem> _productsNameTable;
         private Dictionary<string, IProductItem> _productsSkuTable;
@@ -32,10 +31,9 @@ namespace GameWarriors.VendorDomian.Core
 
         public string VendorLink => $"https://cafebazaar.ir/app/{Application.identifier}";
 
-        public int? UnconsumePurchaseCount => 0;
+        public int? UnconsumePurchaseCount => _orderTable?.Count;
 
         public bool HasValidation => true;
-
 
         public string MarketPackageName => "com.farsitel.bazaar";
 
@@ -68,34 +66,47 @@ namespace GameWarriors.VendorDomian.Core
 
         }
 
-        public void Initialization(IServiceProvider serviceProvider)
+        public async void Initialization(IServiceProvider serviceProvider)
         {
             _vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
             SecurityCheck securityCheck = SecurityCheck.Enable(_key);
             PaymentConfiguration paymentConfiguration = new(securityCheck);
-            _payment = new Payment(paymentConfiguration);
-            _ = TryConnecting();
+            _storeController = new Payment(paymentConfiguration);
+            await TryConnecting();
         }
 
         private async Task<bool> TryConnecting()
         {
+            if (_storeController == null)
+                return false;
+
             try
             {
                 SetState(EStoreSetupState.Initializing);
-                await _payment.Connect();
+                Result<bool> result = await _storeController.Connect();
+                if (result.status != Status.Success)
+                {
+                    SetState(EStoreSetupState.None);
+                    _vendorEventListener?.StoreInitializeFailed(Id, result.ToString());
+                    return false;
+                }
+                SetState(EStoreSetupState.Initialized);
+
+                if (_productsNameTable != null)
+                    RefreshProducts();
+
+                return true;
             }
             catch (Exception e)
             {
                 SetState(EStoreSetupState.None);
-                _vendorEventListener.StoreInitializeFailed(Id, e.ToString());
+                _vendorEventListener?.StoreInitializeFailed(Id, e.ToString());
                 return false;
             }
-
-            return true;
         }
 
-        private async void OnLoadDone(IVendorConfigurationObject resource)
+        private void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
             {
@@ -106,12 +117,16 @@ namespace GameWarriors.VendorDomian.Core
             _key = resource.StoreKey;
             _productsNameTable = new(resource.ItemCounts);
             _productsSkuTable = new(resource.ItemCounts);
+            _subscriptionsTable = new();
 
             foreach (IProductItem product in resource.Products)
             {
                 _productsNameTable.Add(product.Name, product);
                 _productsSkuTable.Add(product.Id, product);
             }
+
+            if (IsInitialized)
+                RefreshProducts();
         }
 
         public IProductItem GetProductByName(string id)
@@ -163,7 +178,7 @@ namespace GameWarriors.VendorDomian.Core
         public async void TryBuyProduct(string sku, string payload)
         {
             IProductItem purchaseItem = GetProductNameById(sku);
-            if (_payment == null)
+            if (_storeController == null)
             {
                 _vendorEventListener.PurchasedFailed(Id, purchaseItem, 0, "store not initializaed");
                 return;
@@ -178,12 +193,19 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
 
-            Result<PurchaseInfo> result = await _payment.Purchase(sku, payload: payload);
+            Result<PurchaseInfo> result = await _storeController.Purchase(sku, payload: payload);
             if (result.status == Status.Success)
             {
-                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
-                                result.data.purchaseTime,
-                                result.data.orderId, result.data.purchaseToken, EPurchaseOrigin.FreshPurchase);
+                if (result.data.purchaseState == PurchaseInfo.State.Purchased)
+                {
+                    _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
+                                    result.data.purchaseTime,
+                                    result.data.orderId, result.data.purchaseToken, EPurchaseOrigin.FreshPurchase);
+                }
+                else
+                {
+                    _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)result.data.purchaseState, result.message);
+                }
             }
             else if (result.status == Status.InstallBazaar)
             {
@@ -197,7 +219,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public void Dispose()
         {
-            _payment.Disconnect();
+            _storeController.Disconnect();
         }
 
         public void SetProdcutSalesOffState(string itemName, bool offState)
@@ -217,15 +239,15 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-        public async void FetchUnconsumePurchases()
+        public void FetchUnconsumePurchases()
         {
-            var result = await _payment.GetPurchases();
+            RefreshPurchases(string.Empty);
         }
 
 
         public async void RefreshPurchases(string sku)
         {
-            Result<List<PurchaseInfo>> result = await _payment.GetPurchases();
+            Result<List<PurchaseInfo>> result = await _storeController.GetPurchases();
             if (result.status != Status.Success)
                 return;
             _orderTable ??= new Dictionary<string, PurchaseInfo>();
@@ -237,10 +259,10 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     if (item.purchaseState == PurchaseInfo.State.Purchased && prodcut.Type == EProductType.Consumable)
                     {
-                        _orderTable.Add(item.productId, item);
+                        _orderTable.Add(item.purchaseToken, item);
                     }
                     else if (item.purchaseState == PurchaseInfo.State.Purchased || item.purchaseState == PurchaseInfo.State.Consumed
-                        && prodcut.Type == EProductType.Subscription )
+                        && prodcut.Type == EProductType.Subscription)
                     {
                         SKUDetails details = prodcut as SKUDetails;
                         if (details != null && details.subscriptionExpireDate > DateTime.UtcNow)
@@ -251,13 +273,6 @@ namespace GameWarriors.VendorDomian.Core
 
             SetState(EStoreSetupState.FetchPurchases);
             _vendorEventListener.OnSubscriptionsUpdate(Id);
-        }
-
-
-        private void BazaarNotSupport(string message)
-        {
-            Debug.LogError(message);
-            _vendorEventListener.StoreInitializeFailed();
         }
 
         private static DateTime ToDateFromBazaar(long miliSeconds)
@@ -272,18 +287,26 @@ namespace GameWarriors.VendorDomian.Core
         }
 
 
-
         public bool ConsumePurchase(string transactionId)
         {
-            _ = _payment.Consume(transactionId, (info) =>
+            if (_storeController == null || _orderTable == null)
+                return false;
+            if (_orderTable.Remove(transactionId))
             {
-            });
-
+                _ = _storeController.Consume(transactionId, result =>
+                {
+                    //if (result.status == Status.Success)
+                    //    _orderTable.Remove(transactionId);
+                });
+                return true;
+            }
+            return false;
         }
 
         public async void RefreshProducts()
         {
-            if (_isFetchingProducts)
+            if (_isFetchingProducts || _storeController == null ||
+                _productsNameTable == null || _state < EStoreSetupState.Initialized)
                 return;
             var products = new List<string>();
             foreach (var item in _productsNameTable.Values)
@@ -291,7 +314,7 @@ namespace GameWarriors.VendorDomian.Core
                 products.Add(item.Id);
             }
             _isFetchingProducts = true;
-            Result<List<SKUDetails>> result = await _payment.GetSkuDetails(products);
+            Result<List<SKUDetails>> result = await _storeController.GetSkuDetails(products);
             _isFetchingProducts = false;
             if (result.status != Status.Success)
                 return;
@@ -310,10 +333,16 @@ namespace GameWarriors.VendorDomian.Core
             RefreshPurchases(string.Empty);
         }
 
-        public ISubscriptionInfo GetSubscriptionInfoByName(string itemName)
+        public ISubscriptionInfo GetSubscriptionInfoByName(string productName)
         {
-            throw new NotImplementedException();
+            if (_productsNameTable.TryGetValue(productName, out var item))
+            {
+                if (_subscriptionsTable.TryGetValue(item.Id, out SKUDetails info))
+                    return new SubscriptionData(info.subscriptionExpireDate);
+            }
+            return null;
         }
+
     }
 #endif
 }
