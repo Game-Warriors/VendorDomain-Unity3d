@@ -153,6 +153,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseFailed(FailedOrder order)
         {
+            UnityEngine.Debug.Log($"purchase FailureReason:{order.FailureReason}");
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -164,6 +165,7 @@ namespace GameWarriors.VendorDomian.Core
                     {
                         if (_orderTable.TryGetValue(order.Info.TransactionID, out var pending))
                         {
+                            UnityEngine.Debug.Log($"purchase found order");
                             _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
                                 (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
                                 order.Info.Receipt, order.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
@@ -171,6 +173,7 @@ namespace GameWarriors.VendorDomian.Core
                         }
                         else
                         {
+                            UnityEngine.Debug.Log($"purchase no order FetchPurchases");
                             _storeController.FetchPurchases();
                         }
                     }
@@ -189,7 +192,9 @@ namespace GameWarriors.VendorDomian.Core
         private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
         {
             _orderTable ??= new();
+            UnityEngine.Debug.Log($"purchase ProcessPendingOrder");
             _orderTable.TryAdd(order.Info.TransactionID, order);
+            UnityEngine.Debug.Log($"purchase _orderTable " + _orderTable.Count);
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -360,7 +365,7 @@ namespace GameWarriors.VendorDomian.Core
                 if (_productsSkuTable.TryGetValue(sku, out IProductItem product))
                 {
                     product.SetPrice((float)item.metadata.localizedPrice);
-                    product.SetMetaData(new GoogeProductMeta(item.metadata));
+                    product.SetMetaData(new GoogleProductMeta(item.metadata));
                 }
             }
 

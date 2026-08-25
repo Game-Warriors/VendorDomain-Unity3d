@@ -1,9 +1,10 @@
-using Bazaar.Poolakey.Data;
+
 using GameWarriors.VendorDomian.Abstraction;
 
 namespace GameWarriors.VendorDomian.Data
 {
 #if BAZAAR
+    using Bazaar.Poolakey.Data;
     public class BazaarProductMeta : IPurchaseItemMeta
     {
         private readonly SKUDetails _metadata;

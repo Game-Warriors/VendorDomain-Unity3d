@@ -1,3 +1,6 @@
+    version : 0.2.0
+    add logs for debuging, fix some naming
+
     version : 0.1.9
     reimplement pending purchase structure. break dependency to VendorPurchaseItem class to other abstraction dependency.
 

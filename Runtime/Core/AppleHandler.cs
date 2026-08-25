@@ -306,7 +306,7 @@ namespace GameWarriors.VendorDomian.Core
                 if (_productsSkuTable.TryGetValue(item.definition.id, out IProductItem product))
                 {
                     product.SetPrice((float)item.metadata.localizedPrice);
-                    product.SetMetaData(new GoogeProductMeta(item.metadata));
+                    product.SetMetaData(new GoogleProductMeta(item.metadata));
                 }
             }
 
