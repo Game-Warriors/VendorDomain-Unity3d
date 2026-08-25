@@ -12,7 +12,6 @@ namespace GameWarriors.VendorDomian.Core
         private readonly Dictionary<string, IMarketHandler> _marketTable;
         private IMarketHandler _defaultMarket;
         private readonly IServiceProvider _serviceProvider;
-        private string selectedId;
 
         public string MarketId => _defaultMarket?.Id;
         public bool IsValidate => _defaultMarket.HasValidation;
@@ -128,7 +127,6 @@ namespace GameWarriors.VendorDomian.Core
 
         void IVendor.PurchaseProduct(string packName, bool hasOff)
         {
-            selectedId = packName;
             IProductItem product = _defaultMarket.GetProductByName(packName);
             string productId = hasOff && product.HasOff ? product.OffProductId : product.Id;
             _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());

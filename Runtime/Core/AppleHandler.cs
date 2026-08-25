@@ -132,6 +132,8 @@ namespace GameWarriors.VendorDomian.Core
             {
                 _productsNameTable.Add(product.Name, product);
                 _productsSkuTable.Add(product.Id, product);
+                if (!string.IsNullOrEmpty(product.OffProductId))
+                    _productsSkuTable[product.OffProductId] = product;
             }
 
             if (IsInitialized)
@@ -148,7 +150,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshProducts()
         {
-            if (_storeController == null || _productsNameTable == null || _isFetchingProducts)
+            if (_storeController == null || _productsNameTable == null ||
+                _isFetchingProducts || _state < EStoreSetupState.Initialized)
                 return;
 
             var products = new List<ProductDefinition>(_productsSkuTable.Count);
@@ -240,7 +243,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseConfirmed(Order order)
         {
-            _orderTable.Remove(order.Info.TransactionID);
+            _orderTable?.Remove(order.Info.TransactionID);
             foreach (CartItem item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -252,7 +255,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseDeferred(DeferredOrder order)
         {
-            _orderTable.Remove(order.Info.TransactionID);
+            _orderTable?.Remove(order.Info.TransactionID);
             foreach (CartItem item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -271,24 +274,17 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     IProductItem purchaseItem = GetProductNameById(product.definition.id);
 
-                    if (order.FailureReason == PurchaseFailureReason.ExistingPurchasePending)
+                    if (order.FailureReason == PurchaseFailureReason.ExistingPurchasePending ||
+                        order.FailureReason == PurchaseFailureReason.DuplicateTransaction)
                     {
-                        if (_orderTable.TryGetValue(order.Info.TransactionID, out var pending))
+                        RestorePurchases();
+                        PendingOrder pendingOrder = GetOrderByProductId(product.definition.id);
+                        if (pendingOrder != null)
                         {
                             _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
-                                (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
-                                order.Info.Receipt, order.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
+                                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), pendingOrder.Info.Receipt,
+                                pendingOrder.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
                             return;
-                        }
-                        else
-                        {
-                            _storeController.RestoreTransactions((success, error) =>
-                            {
-                                if (!success)
-                                    _vendorEventListener?.OnError(Id, 0, error ?? "Apple purchase restore failed.");
-                                else if (UnconsumePurchaseCount == null)
-                                    _storeController?.FetchPurchases();
-                            });
                         }
                     }
                     else if (order.FailureReason == PurchaseFailureReason.UserCancelled)
@@ -312,13 +308,7 @@ namespace GameWarriors.VendorDomian.Core
 
             SetState(EStoreSetupState.FetchProducts);
             _vendorEventListener.OnPurchaseItemsUpdate(Id);
-            _storeController.RestoreTransactions((success, error) =>
-            {
-                if (!success)
-                    _vendorEventListener?.OnError(Id, 0, error ?? "Apple purchase restore failed.");
-                else if (UnconsumePurchaseCount == null)
-                    _storeController?.FetchPurchases();
-            });
+            RestorePurchases();
         }
 
         private void OnProductsFetchFailed(ProductFetchFailed failure)
@@ -407,12 +397,40 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool ConsumePurchase(string transactionId)
         {
-            if (_orderTable.Remove(transactionId, out var order))
+            if (_orderTable != null && _orderTable.Remove(transactionId, out PendingOrder order))
             {
-                _storeController.ConfirmPurchase(order);
+                _storeController?.ConfirmPurchase(order);
                 return true;
             }
             return false;
+        }
+
+        private void RestorePurchases()
+        {
+            _storeController?.RestoreTransactions((success, error) =>
+            {
+                if (!success)
+                    _vendorEventListener?.OnError(Id, 0, error ?? "Apple purchase restore failed.");
+                else
+                    _storeController?.FetchPurchases();
+            });
+        }
+
+        private PendingOrder GetOrderByProductId(string productId)
+        {
+            if (_orderTable == null)
+                return null;
+
+            foreach (PendingOrder order in _orderTable.Values)
+            {
+                foreach (CartItem item in order.CartOrdered.Items())
+                {
+                    if (item.Product.definition.id == productId)
+                        return order;
+                }
+            }
+
+            return null;
         }
 
         IProductItem IMarketHandler.GetProductByName(string itemName)

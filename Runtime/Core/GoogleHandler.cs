@@ -69,7 +69,7 @@ namespace GameWarriors.VendorDomian.Core
             return;
         }
 
-        public void Initialization(IServiceProvider serviceProvider)
+        public async void Initialization(IServiceProvider serviceProvider)
         {
             IVendorEventListener vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             _vendorEventListener = vendorEventListener;
@@ -85,7 +85,7 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnStoreConnected += StoreConnected;
 
             //_storeController.ProcessPendingOrdersOnPurchasesFetched
-            _ = TryConnecting();
+            await TryConnecting();
 
         }
 
@@ -153,28 +153,22 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseFailed(FailedOrder order)
         {
-            UnityEngine.Debug.Log($"purchase FailureReason:{order.FailureReason}");
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
                 if (!string.IsNullOrEmpty(product.definition.id))
                 {
                     IProductItem purchaseItem = GetProductNameById(product.definition.id);
-
-                    if (order.FailureReason == PurchaseFailureReason.ExistingPurchasePending)
+                    if (order.FailureReason == PurchaseFailureReason.ExistingPurchasePending || order.FailureReason == PurchaseFailureReason.DuplicateTransaction)
                     {
-                        if (_orderTable.TryGetValue(order.Info.TransactionID, out var pending))
+                        _storeController.FetchPurchases();
+                        PendingOrder pendingOrder = GetOrderByProductId(product.definition.id);
+                        if (pendingOrder != null)
                         {
-                            UnityEngine.Debug.Log($"purchase found order");
                             _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, product.metadata.isoCurrencyCode,
                                 (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds,
                                 order.Info.Receipt, order.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
                             return;
-                        }
-                        else
-                        {
-                            UnityEngine.Debug.Log($"purchase no order FetchPurchases");
-                            _storeController.FetchPurchases();
                         }
                     }
                     else if (order.FailureReason == PurchaseFailureReason.UserCancelled)
@@ -192,9 +186,7 @@ namespace GameWarriors.VendorDomian.Core
         private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
         {
             _orderTable ??= new();
-            UnityEngine.Debug.Log($"purchase ProcessPendingOrder");
             _orderTable.TryAdd(order.Info.TransactionID, order);
-            UnityEngine.Debug.Log($"purchase _orderTable " + _orderTable.Count);
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -233,7 +225,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshProducts()
         {
-            if (_isFetchingProducts)
+            if (_isFetchingProducts || _storeController == null || _state < EStoreSetupState.Initialized)
                 return;
             var products = new List<ProductDefinition>();
             foreach (var item in _productsNameTable.Values)
@@ -370,8 +362,8 @@ namespace GameWarriors.VendorDomian.Core
             }
 
             SetState(EStoreSetupState.FetchProducts);
-            _vendorEventListener.OnPurchaseItemsUpdate(Id);
             _storeController.FetchPurchases();
+            _vendorEventListener.OnPurchaseItemsUpdate(Id);
         }
 
         private void OnProductsFetchFailed(ProductFetchFailed failed)
@@ -383,6 +375,21 @@ namespace GameWarriors.VendorDomian.Core
         {
             _state = state;
             _vendorEventListener?.OnVendorStateChanged(Id, state);
+        }
+
+        private PendingOrder GetOrderByProductId(string productId)
+        {
+            if (_orderTable == null)
+                return null;
+            foreach (var order in _orderTable.Values)
+            {
+                foreach (var item in order.CartOrdered.Items())
+                {
+                    if (item.Product.definition.id == productId)
+                        return order;
+                }
+            }
+            return null;
         }
     }
 }

@@ -15,7 +15,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         int PurchaseLimit { get; }
         bool EnableState { get; }
         bool HasOff { get; }
-
+        IPurchaseItemMeta ItemMeta { get; }
         void SetOffState(bool state);
         void SetPrice(float price);
         void SetMetaData(IPurchaseItemMeta meta);

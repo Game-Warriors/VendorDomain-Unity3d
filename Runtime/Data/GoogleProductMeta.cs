@@ -3,7 +3,7 @@ using UnityEngine.Purchasing;
 
 namespace GameWarriors.VendorDomian.Data
 {
-#if GOOGLE
+#if GOOGLE || APPLE
     public class GoogleProductMeta : IPurchaseItemMeta
     {
         private readonly ProductMetadata _metadata;
