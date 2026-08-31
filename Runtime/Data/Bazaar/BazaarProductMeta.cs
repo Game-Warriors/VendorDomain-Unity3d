@@ -1,10 +1,10 @@
-
 using GameWarriors.VendorDomian.Abstraction;
 
-namespace GameWarriors.VendorDomian.Data
-{
 #if BAZAAR
-    using Bazaar.Poolakey.Data;
+using Bazaar.Poolakey.Data;
+
+namespace GameWarriors.VendorDomian.Data.Bazaar
+{
     public class BazaarProductMeta : IPurchaseItemMeta
     {
         private readonly SKUDetails _metadata;
@@ -14,12 +14,12 @@ namespace GameWarriors.VendorDomian.Data
         public string LocalisedPrice => _metadata.price;
         public decimal Price { get; }
         public string CurrencyCode => "IRR";
-
+        public SKUDetails SKUDetail => _metadata;
         public BazaarProductMeta(SKUDetails metadata, float price)
         {
             _metadata = metadata;
             Price = (decimal)price;
         }
     }
-#endif
 }
+#endif

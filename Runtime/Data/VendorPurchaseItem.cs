@@ -22,6 +22,7 @@ namespace GameWarriors.VendorDomian.Data
         [SerializeField]
         private EProductType _type;
         [SerializeField]
+        [Header("the purchase count limit for consumable products or could be used as duration day value for subscription products")]
         private int _purchaseLimit;
         [SerializeField]
         private bool _isEnable;

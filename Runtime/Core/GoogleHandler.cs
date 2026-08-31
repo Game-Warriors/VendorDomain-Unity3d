@@ -357,7 +357,7 @@ namespace GameWarriors.VendorDomian.Core
                 if (_productsSkuTable.TryGetValue(sku, out IProductItem product))
                 {
                     product.SetPrice((float)item.metadata.localizedPrice);
-                    product.SetMetaData(new GoogleProductMeta(item.metadata));
+                    product.SetMetaData(new UnityProductMeta(item.metadata));
                 }
             }
 

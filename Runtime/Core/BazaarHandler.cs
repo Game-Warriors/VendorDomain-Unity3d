@@ -15,11 +15,13 @@ namespace GameWarriors.VendorDomian.Core
     using Bazaar.Poolakey.Data;
     using System.Threading.Tasks;
     using Bazaar.Data;
+    using GameWarriors.VendorDomian.Data.Bazaar;
 
     public class BazaarHandler : IMarketHandler
     {
         private string _key;
         private bool _isFetchingProducts;
+        private bool _isFetchingPurchases;
         private EStoreSetupState _state;
         private Payment _storeController;
         private IVendorEventListener _vendorEventListener;
@@ -33,7 +35,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public int? UnconsumePurchaseCount => _orderTable?.Count;
 
-        public bool HasValidation => true;
+        public bool HasValidation => false;
 
         public string MarketPackageName => "com.farsitel.bazaar";
 
@@ -244,10 +246,13 @@ namespace GameWarriors.VendorDomian.Core
             RefreshPurchases(string.Empty);
         }
 
-
         public async void RefreshPurchases(string sku)
         {
+            if (_isFetchingPurchases)
+                return;
+            _isFetchingPurchases = true;
             Result<List<PurchaseInfo>> result = await _storeController.GetPurchases();
+            _isFetchingPurchases = false;
             if (result.status != Status.Success)
                 return;
             _orderTable ??= new Dictionary<string, PurchaseInfo>();
@@ -255,16 +260,17 @@ namespace GameWarriors.VendorDomian.Core
             _subscriptionsTable.Clear();
             foreach (var item in result.data)
             {
-                if (_productsSkuTable.TryGetValue(item.productId, out var prodcut))
+                if (_productsSkuTable.TryGetValue(item.productId, out IProductItem product))
                 {
-                    if (item.purchaseState == PurchaseInfo.State.Purchased && prodcut.Type == EProductType.Consumable)
+                    if (item.purchaseState == PurchaseInfo.State.Purchased && product.Type == EProductType.Consumable)
                     {
                         _orderTable.Add(item.purchaseToken, item);
                     }
                     else if (item.purchaseState == PurchaseInfo.State.Purchased || item.purchaseState == PurchaseInfo.State.Consumed
-                        && prodcut.Type == EProductType.Subscription)
+                        && product.Type == EProductType.Subscription)
                     {
-                        SKUDetails details = prodcut as SKUDetails;
+
+                        SKUDetails details = ((BazaarProductMeta)product.ItemMeta).SKUDetail;
                         if (details != null && details.subscriptionExpireDate > DateTime.UtcNow)
                             _subscriptionsTable.Add(item.productId, details);
                     }
@@ -285,7 +291,6 @@ namespace GameWarriors.VendorDomian.Core
             _state = state;
             _vendorEventListener?.OnVendorStateChanged(Id, state);
         }
-
 
         public bool ConsumePurchase(string transactionId)
         {
