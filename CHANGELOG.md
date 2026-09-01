@@ -1,3 +1,6 @@
+    version : 0.2.4
+    add editor feature for myket and xsolla, develop xsolla handler.
+
     version : 0.2.3
     import new myket sdk and setup, develop myket handler.
 

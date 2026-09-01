@@ -9,5 +9,6 @@ namespace GameWarriors.VendorDomian.Constants
         public const string BAZAAR = "Bazaar";
         public const string APPLE = "Apple";
         public const string MYKET = "Myket";
+        public const string XSOLLA = "Xsolla";
     }
 }

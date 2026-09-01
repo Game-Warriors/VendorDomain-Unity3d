@@ -29,11 +29,13 @@ The package currently includes handlers for:
 - Google Play
 - Apple App Store
 - Cafe Bazaar
+- Myket
+- Xsolla
 - Zarinpal on Android and iOS
 - Windows and Editor fallback flows
 
 > The package's existing namespace is `GameWarriors.VendorDomian` (including the `Domian` spelling). Use that spelling in imports.
-
+> **Note:** the Google, Apple and Xsolla handler need unity purchase package version 5.4.2 above.
 ## Features
 
 - One purchasing API across supported markets
@@ -55,7 +57,9 @@ The package currently includes handlers for:
 - Unity Purchasing 5.x; version 5.4.2 is currently tested
 - An `IServiceProvider` containing the services required by the selected handlers
 - Store products configured in App Store Connect or Google Play Console with identifiers matching the Unity configuration
-
+- To using Bazaar handler the [Poolakey SDK package](https://github.com/Game-Warriors/Poolakey-sdk) should also import into project
+- To using Myket handler the [Myket SDK package](https://github.com/Game-Warriors/Myket-sdk) should also import into project
+- To using Xsolla handler the [Xsolla SDK package](https://github.com/Game-Warriors/Xsolla-unity3d) should also import into project
 For Google Play and Apple App Store, install Unity IAP through Package Manager:
 
 ```text
@@ -85,6 +89,8 @@ Add the relevant custom symbol under **Project Settings > Player > Other Setting
 | Google Play | `GOOGLE` | `GoogleHandler` |
 | Apple App Store | `APPLE` | `AppleHandler` |
 | Cafe Bazaar | `BAZAAR` | `BazaarHandler` |
+| Myket | `MYKET` | `MyketHandler` |
+| Xsolla | `XSOLLA` | `XsollaHandler` |
 
 Use platform-specific symbol lists so Android and iOS builds do not include the wrong store handler. The Google and Apple classes are not compiled unless their corresponding symbols are defined.
 

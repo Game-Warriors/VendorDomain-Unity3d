@@ -1,6 +1,6 @@
 {
   "name": "com.gamewarriors.vendorsystem",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "displayName": "Vendor System",
   "description": "This package provide base structure for vendor requiermrnt such as rating, in app purchase, open store link, support purchase off and currency data item",
   "unity": "2022.3",
@@ -16,7 +16,8 @@
     "RateApp",
     "AppStore",
     "Apple",
-    "Unity3d"
+    "Unity3d",
+    "Xsolla"
   ],
   "author": {
     "name": "Game Warriors",

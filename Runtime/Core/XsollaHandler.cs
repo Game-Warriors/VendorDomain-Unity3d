@@ -1,26 +1,28 @@
-﻿using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Constants;
 using GameWarriors.VendorDomian.Data;
+using GameWarriors.VendorDomian.Enums;
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
-#if GOOGLE
+
 namespace GameWarriors.VendorDomian.Core
 {
-    using GameWarriors.VendorDomian.Constants;
-    using GameWarriors.VendorDomian.Enums;
-    using System.Collections.Generic;
-    using System.Threading.Tasks;
+#if XSOLLA
+    using Xsolla.SDK.Common;
+    using Xsolla.SDK.UnityPurchasing;
     using UnityEngine.Purchasing;
 
-
-    public class GoogleHandler : IMarketHandler
+    public class XsollaHandler : IMarketHandler
     {
-        // Apple App Store-specific product identifier for the subscription product.
-        private const string kProductNameAppleSubscription = "com.unity3d.subscription.new";
-        // Google Play Store-specific product identifier subscription product.
-        private const string kProductNameGooglePlaySubscription = "com.unity3d.subscription.original";
+        private string _key;
+        private int _projectId;
+        private bool _isTestMode;
         private StoreController _storeController;
         private bool _isFetchingProducts;
+        private bool _isFetchingPurchases;
         private EStoreSetupState _state;
 
         private IVendorEventListener _vendorEventListener;
@@ -29,8 +31,8 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
         private Dictionary<string, PendingOrder> _orderTable;
 
-        public string Id => MarketId.GOOGLE;
-        public string MarketPackageName => "com.android.vending";
+        public string Id => MarketId.XSOLLA;
+        public string MarketPackageName => throw new NotSupportedException();
         public string VendorLink => "https://play.google.com/store/apps/details?id=" + Application.identifier;
         public int? UnconsumePurchaseCount => _orderTable?.Count;
         public bool HasValidation => false;
@@ -54,7 +56,7 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
-        public GoogleHandler(IVendorResourceLoader resourceLoader)
+        public XsollaHandler(IVendorResourceLoader resourceLoader)
         {
             resourceLoader.LoadAsync(Id, OnLoadDone);
         }
@@ -73,8 +75,22 @@ namespace GameWarriors.VendorDomian.Core
         {
             IVendorEventListener vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
             _vendorEventListener = vendorEventListener;
-            _storeController = UnityIAPServices.StoreController();
-            _storeController.ProcessPendingOrdersOnPurchasesFetched(false);
+            var settings = XsollaClientSettings.Builder.Create()
+                .SetProjectId(_projectId)
+                .SetLoginId(_key)
+                .Build();
+            var configuration = XsollaClientConfiguration.Builder.Create()
+                .SetSettings(settings)
+                .SetSandbox(_isTestMode)
+                .Build();
+
+            var module = XsollaPurchasingModule.Builder.Create()
+                .SetConfiguration(configuration)
+                .Build();
+
+            StoreController storeController = module.CreateStoreController();
+            IXsollaPurchasingStoreExtension xsolla = module.GetStoreExtension();
+
             _storeController.OnPurchasePending += OnPurchasePending;
             _storeController.OnPurchasesFetched += OnPurchasesFetched;
             _storeController.OnPurchaseFailed += OnPurchaseFailed;
@@ -83,10 +99,7 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
             _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
             _storeController.OnStoreConnected += StoreConnected;
-
-            //_storeController.ProcessPendingOrdersOnPurchasesFetched
             await TryConnecting();
-
         }
 
         private async Task<bool> TryConnecting()
@@ -116,7 +129,9 @@ namespace GameWarriors.VendorDomian.Core
             }
             _productsNameTable = new(resource.ItemCounts);
             _productsSkuTable = new(resource.ItemCounts);
-
+            _key = resource.StoreKey;
+            _projectId = resource.StoreId;
+            _isTestMode = resource.IsTestMode;
             foreach (IProductItem product in resource.Products)
             {
                 _productsNameTable.Add(product.Name, product);
@@ -153,6 +168,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseFailed(FailedOrder order)
         {
+            _isFetchingPurchases = false;
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -199,6 +215,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchasesFetched(Orders orders)
         {
+            _isFetchingPurchases = false;
             foreach (PendingOrder order in orders.PendingOrders)
                 ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
 
@@ -238,25 +255,28 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshPurchases(string sku)
         {
+            if (_isFetchingPurchases)
+                return;
+
+            _isFetchingPurchases = true;
             _storeController.FetchPurchases();
         }
+
 
         public void OpenPage()
         {
             Application.OpenURL("market://details?id=" + Application.identifier);
         }
 
-        public void RateUs(Action<bool> onRateDone)
+        public void RateUs(Action<bool> rateDone)
         {
             Application.OpenURL("market://details?id=" + Application.identifier);
         }
-
 
         public void FetchUnconsumePurchases()
         {
             RefreshPurchases(string.Empty);
         }
-
 
         public async void TryBuyProduct(string sku, string payload)
         {
@@ -392,5 +412,5 @@ namespace GameWarriors.VendorDomian.Core
             return null;
         }
     }
-}
 #endif
+}

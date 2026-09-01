@@ -1,9 +1,10 @@
 using GameWarriors.VendorDomian.Abstraction;
-using UnityEngine.Purchasing;
+
 
 namespace GameWarriors.VendorDomian.Data
 {
-#if GOOGLE || APPLE
+#if GOOGLE || APPLE || XSOLLA
+    using UnityEngine.Purchasing;
     public class UnityProductMeta : IPurchaseItemMeta
     {
         private readonly ProductMetadata _metadata;

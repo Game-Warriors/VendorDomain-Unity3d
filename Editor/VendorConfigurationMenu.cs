@@ -8,28 +8,56 @@ namespace GameWarriors.VendorDomian.VendorEditor
 {
     public class VendorConfigurationMenu : ScriptableWizard
     {
-        private const string ASSET_DIRECTORY = "Assets/AssetData/Vendor";
-        private readonly string BAZAAR_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.BAZAAR}VendorConfig.asset";
-        private readonly string GOOGLE_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.GOOGLE}VendorConfig.asset";
-        private readonly string APPLE_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.APPLE}VendorConfig.asset";
-        private readonly string ZARINPAL_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.ZARINPAL}VendorConfig.asset";
+        private const int SPACE = 10;
+        public const string ASSET_DIRECTORY = "Assets/AssetData/Vendor";
+        public readonly string BAZAAR_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.BAZAAR}VendorConfig.asset";
+        public readonly string MYKET_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.MYKET}VendorConfig.asset";
+        public readonly string GOOGLE_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.GOOGLE}VendorConfig.asset";
+        public readonly string APPLE_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.APPLE}VendorConfig.asset";
+        public readonly string ZARINPAL_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.ZARINPAL}VendorConfig.asset";
+        public readonly string XSOLLA_ASSET_PATH = $"{ASSET_DIRECTORY}/{MarketId.XSOLLA}VendorConfig.asset";
 
-        [SerializeField]
-        private VendorPurchaseItem[] _bazaarItems;
+        [Space(SPACE)]
         [SerializeField]
         private string _bazaarMarketPackUrl;
         [SerializeField]
-        private VendorPurchaseItem[] _googleItems;
+        private string _bazaarStoreKey;
+        [SerializeField]
+        private VendorPurchaseItem[] _bazaarItems;
+
+        [Space(SPACE)]
+        [SerializeField]
+        private string _myketMarketPackUrl;
+        [SerializeField]
+        private string _myketStoreKey;
+        [SerializeField]
+        private VendorPurchaseItem[] _myketItems;
+
+        [Space(SPACE)]
         [SerializeField]
         private string _googleMarketPackUrl;
         [SerializeField]
-        private VendorPurchaseItem[] _appleItems;
+        private VendorPurchaseItem[] _googleItems;
+
+        [Space(SPACE)]
         [SerializeField]
         private string _appleMarketPackUrl;
         [SerializeField]
-        private VendorPurchaseItem[] _zarinpalItems;
+        private VendorPurchaseItem[] _appleItems;
+
+        [Space(SPACE)]
         [SerializeField]
         private string _zarinpalMarketPackUrl;
+        [SerializeField]
+        private VendorPurchaseItem[] _zarinpalItems;
+
+        [Space(SPACE)]
+        [SerializeField]
+        private string _xsollaMarketPackUrl;
+        [SerializeField]
+        private VendorSetupConfiguration _xsollaSetupConfiguration;
+        [SerializeField]
+        private VendorPurchaseItem[] _xsollaItems;
 
         [MenuItem("Tools/Vendor Configuration")]
         private static void OpenBuildConfigWindow()
@@ -43,8 +71,10 @@ namespace GameWarriors.VendorDomian.VendorEditor
             Directory.CreateDirectory(ASSET_DIRECTORY);
             VendorConfigurationObject googleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(GOOGLE_ASSET_PATH);
             VendorConfigurationObject bazaarAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(BAZAAR_ASSET_PATH);
+            VendorConfigurationObject myketAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(MYKET_ASSET_PATH);
             VendorConfigurationObject appleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(APPLE_ASSET_PATH);
             VendorConfigurationObject zarinpalAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(ZARINPAL_ASSET_PATH);
+            VendorConfigurationObject xsollaAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(XSOLLA_ASSET_PATH);
             if (googleAsset != null)
             {
                 _googleItems = googleAsset.Products;
@@ -55,6 +85,12 @@ namespace GameWarriors.VendorDomian.VendorEditor
             {
                 _bazaarItems = bazaarAsset.Products;
                 _bazaarMarketPackUrl = bazaarAsset.StoreUrl;
+            }
+
+            if (myketAsset != null)
+            {
+                _myketItems = myketAsset.Products;
+                _myketMarketPackUrl = myketAsset.StoreUrl;
             }
 
             if (appleAsset != null)
@@ -68,14 +104,26 @@ namespace GameWarriors.VendorDomian.VendorEditor
                 _zarinpalItems = zarinpalAsset.Products;
                 _zarinpalMarketPackUrl = zarinpalAsset.StoreUrl;
             }
+
+            if (xsollaAsset != null)
+            {
+                _xsollaItems = xsollaAsset.Products;
+                _xsollaMarketPackUrl = xsollaAsset.StoreUrl;
+                if (xsollaAsset.SetupConfig != null)
+                    _xsollaSetupConfiguration = xsollaAsset.SetupConfig;
+                else
+                    _xsollaSetupConfiguration = new VendorSetupConfiguration();
+            }
         }
 
         private void OnWizardCreate()
         {
             VendorConfigurationObject googleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(GOOGLE_ASSET_PATH);
             VendorConfigurationObject bazaarAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(BAZAAR_ASSET_PATH);
+            VendorConfigurationObject myketAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(MYKET_ASSET_PATH);
             VendorConfigurationObject appleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(APPLE_ASSET_PATH);
             VendorConfigurationObject zarinpalAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(ZARINPAL_ASSET_PATH);
+            VendorConfigurationObject xsollaAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(XSOLLA_ASSET_PATH);
 
             if (googleAsset != null)
             {
@@ -105,6 +153,20 @@ namespace GameWarriors.VendorDomian.VendorEditor
                 AssetDatabase.CreateAsset(bazaarAsset, BAZAAR_ASSET_PATH);
             }
 
+            if (myketAsset != null)
+            {
+                myketAsset.SetProducts(_myketItems);
+                myketAsset.SetMarketPackUrl(_myketMarketPackUrl);
+                EditorUtility.SetDirty(myketAsset);
+            }
+            else
+            {
+                myketAsset = CreateInstance<VendorConfigurationObject>();
+                myketAsset.SetProducts(_myketItems);
+                myketAsset.SetMarketPackUrl(_myketMarketPackUrl);
+                AssetDatabase.CreateAsset(myketAsset, MYKET_ASSET_PATH);
+            }
+
             if (appleAsset != null)
             {
                 appleAsset.SetProducts(_appleItems);
@@ -131,6 +193,22 @@ namespace GameWarriors.VendorDomian.VendorEditor
                 zarinpalAsset.SetProducts(_zarinpalItems);
                 zarinpalAsset.SetMarketPackUrl(_zarinpalMarketPackUrl);
                 AssetDatabase.CreateAsset(zarinpalAsset, ZARINPAL_ASSET_PATH);
+            }
+
+            if (xsollaAsset != null)
+            {
+                xsollaAsset.SetProducts(_xsollaItems);
+                xsollaAsset.SetMarketPackUrl(_xsollaMarketPackUrl);
+                xsollaAsset.SetSetupConfig(_xsollaSetupConfiguration);
+                EditorUtility.SetDirty(xsollaAsset);
+            }
+            else
+            {
+                xsollaAsset = CreateInstance<VendorConfigurationObject>();
+                xsollaAsset.SetProducts(_xsollaItems);
+                xsollaAsset.SetMarketPackUrl(_xsollaMarketPackUrl);
+                xsollaAsset.SetSetupConfig(_xsollaSetupConfiguration);
+                AssetDatabase.CreateAsset(xsollaAsset, XSOLLA_ASSET_PATH);
             }
             AssetDatabase.SaveAssets();
         }

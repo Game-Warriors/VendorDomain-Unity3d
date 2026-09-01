@@ -8,5 +8,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         string StoreUrl { get; }
         int ItemCounts { get; }
         string StoreKey { get; }
+        int StoreId { get; }
+        bool IsTestMode { get; }
     }
 }

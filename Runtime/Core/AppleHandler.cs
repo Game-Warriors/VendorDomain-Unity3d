@@ -181,7 +181,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public void FetchUnconsumePurchases()
         {
-            _storeController?.FetchPurchases();
+            RefreshPurchases(string.Empty);
         }
 
         public void ResolveLastUnconsumePurchase()
