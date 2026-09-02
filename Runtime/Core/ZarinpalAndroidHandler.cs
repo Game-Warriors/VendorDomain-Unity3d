@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Net;
 using UnityEngine;
 
-#if GOOGLE
+#if GOOGLE && ZARINPAL
 namespace GameWarriors.VendorDomian.Core
 {
     public class ZarinpalAndroidHandler : MonoBehaviour, IMarketHandler

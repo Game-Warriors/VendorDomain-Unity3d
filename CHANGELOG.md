@@ -1,3 +1,6 @@
+    version : 0.2.6
+    fix bazaar get sku bug.
+
     version : 0.2.5
     add new single provider vendor system.
 

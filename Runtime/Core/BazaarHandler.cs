@@ -313,10 +313,12 @@ namespace GameWarriors.VendorDomian.Core
             if (_isFetchingProducts || _storeController == null ||
                 _productsNameTable == null || _state < EStoreSetupState.Initialized)
                 return;
-            var products = new List<string>();
+            var products = new string[_productsNameTable.Count];
+            int count = 0;
             foreach (var item in _productsNameTable.Values)
             {
-                products.Add(item.Id);
+                products[count] = item.Id;
+                ++count;
             }
             _isFetchingProducts = true;
             Result<List<SKUDetails>> result = await _storeController.GetSkuDetails(products);

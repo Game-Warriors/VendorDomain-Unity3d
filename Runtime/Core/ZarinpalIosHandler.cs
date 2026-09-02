@@ -7,7 +7,7 @@ using GameWarriors.VendorDomian.Data;
 using GameWarriors.VendorDomian.Enums;
 
 
-#if UNITY_IOS || UNITY_EDITOR
+#if (UNITY_IOS || UNITY_EDITOR) && ZARINPAL
 using System.Runtime.InteropServices;
 using UnityEngine.iOS;
 
