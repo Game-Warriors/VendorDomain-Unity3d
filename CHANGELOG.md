@@ -1,3 +1,6 @@
+    version : 0.2.5
+    add new single provider vendor system.
+
     version : 0.2.4
     add editor feature for myket and xsolla, develop xsolla handler.
 
