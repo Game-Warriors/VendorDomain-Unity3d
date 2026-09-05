@@ -1,3 +1,9 @@
+    version : 0.2.8
+    some fix on iOS handler.
+
+    version : 0.2.7
+    apply fetch purchase check state in google and apple handler.
+
     version : 0.2.6
     fix bazaar get sku bug.
 

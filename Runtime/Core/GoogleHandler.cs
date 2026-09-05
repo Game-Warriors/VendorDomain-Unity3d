@@ -21,6 +21,7 @@ namespace GameWarriors.VendorDomian.Core
         private const string kProductNameGooglePlaySubscription = "com.unity3d.subscription.original";
         private StoreController _storeController;
         private bool _isFetchingProducts;
+        private bool _isFetchingPurchases;
         private EStoreSetupState _state;
 
         private IVendorEventListener _vendorEventListener;
@@ -153,6 +154,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseFailed(FailedOrder order)
         {
+            _isFetchingPurchases = false;
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -199,6 +201,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchasesFetched(Orders orders)
         {
+            _isFetchingPurchases = false;
             foreach (PendingOrder order in orders.PendingOrders)
                 ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
 
@@ -225,8 +228,15 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshProducts()
         {
-            if (_isFetchingProducts || _storeController == null || _state < EStoreSetupState.Initialized)
+            if (_isFetchingProducts || _storeController == null)
                 return;
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
             var products = new List<ProductDefinition>();
             foreach (var item in _productsNameTable.Values)
             {
@@ -238,6 +248,17 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshPurchases(string sku)
         {
+            if (_storeController == null || _isFetchingPurchases)
+                return;
+
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
+            _isFetchingPurchases = true;
             _storeController.FetchPurchases();
         }
 

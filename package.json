@@ -1,6 +1,6 @@
 {
   "name": "com.gamewarriors.vendorsystem",
-  "version": "0.2.6",
+  "version": "0.2.8",
   "displayName": "Vendor System",
   "description": "This package provide base structure for vendor requiermrnt such as rating, in app purchase, open store link, support purchase off and currency data item",
   "unity": "2022.3",

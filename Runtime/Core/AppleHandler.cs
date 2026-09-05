@@ -22,6 +22,7 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, PendingOrder> _orderTable;
         private EStoreSetupState _state;
         private bool _isFetchingProducts;
+        private bool _isFetchingPurchases;
 
         public string Id => MarketId.APPLE;
         public string MarketPackageName => "itms-apps://";
@@ -127,13 +128,13 @@ namespace GameWarriors.VendorDomian.Core
 
             VendorLink = "https://apps.apple.com/" + resource.StoreUrl;
             _productsNameTable = new(resource.ItemCounts);
-            _productsSkuTable = new(resource.ItemCounts * 2);
+            _productsSkuTable = new(resource.ItemCounts);
             foreach (IProductItem product in resource.Products)
             {
                 _productsNameTable.Add(product.Name, product);
                 _productsSkuTable.Add(product.Id, product);
                 if (!string.IsNullOrEmpty(product.OffProductId))
-                    _productsSkuTable[product.OffProductId] = product;
+                    _productsSkuTable.Add(product.OffProductId, product);
             }
 
             if (IsInitialized)
@@ -144,20 +145,25 @@ namespace GameWarriors.VendorDomian.Core
         {
             _subscriptionsTable = new Dictionary<string, SubscriptionInfo>();
             SetState(EStoreSetupState.Initialized);
-            if (_productsNameTable != null)
-                RefreshProducts();
+            RefreshProducts();
         }
 
         public void RefreshProducts()
         {
-            if (_storeController == null || _productsNameTable == null ||
-                _isFetchingProducts || _state < EStoreSetupState.Initialized)
+            if (_isFetchingProducts || _storeController == null)
                 return;
-
-            var products = new List<ProductDefinition>(_productsSkuTable.Count);
-            foreach (KeyValuePair<string, IProductItem> entry in _productsSkuTable)
-                products.Add(new ProductDefinition(entry.Key, (ProductType)entry.Value.Type));
-
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
+            var products = new List<ProductDefinition>(_productsNameTable.Count);
+            foreach (var item in _productsNameTable.Values)
+            {
+                products.Add(new ProductDefinition(item.Id, (ProductType)item.Type));
+            }
             if (products.Count == 0)
                 return;
 
@@ -167,15 +173,28 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshPurchases(string sku)
         {
-            if (_storeController == null)
+            if (_storeController == null || _isFetchingPurchases)
                 return;
 
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
+            _isFetchingPurchases = true;
             _storeController.RestoreTransactions((success, error) =>
             {
                 if (!success)
+                {
+                    _isFetchingPurchases = false;
                     _vendorEventListener?.OnError(Id, 0, error ?? "Apple purchase restore failed.");
+                }
                 else if (UnconsumePurchaseCount == null)
                     _storeController?.FetchPurchases();
+                else
+                    _isFetchingPurchases = false;
             });
         }
 
@@ -267,6 +286,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseFailed(FailedOrder order)
         {
+            _isFetchingPurchases = false;
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -319,6 +339,7 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchasesFetched(Orders orders)
         {
+            _isFetchingPurchases = false;
             foreach (PendingOrder order in orders.PendingOrders)
                 ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
 

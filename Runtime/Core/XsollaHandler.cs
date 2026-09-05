@@ -242,8 +242,17 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshProducts()
         {
-            if (_isFetchingProducts || _storeController == null || _state < EStoreSetupState.Initialized)
+            if (_storeController == null)
                 return;
+
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
+
             var products = new List<ProductDefinition>();
             foreach (var item in _productsNameTable.Values)
             {
