@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Core
 {
-#if XSOLLA
+#if XSOLLA || true
     using Xsolla.SDK.Common;
     using Xsolla.SDK.UnityPurchasing;
     using UnityEngine.Purchasing;
@@ -38,7 +38,8 @@ namespace GameWarriors.VendorDomian.Core
         public bool HasValidation => false;
 
         public bool IsLoading => _productsNameTable == null;
-        public bool IsInitialized => _state > EStoreSetupState.Initializing;
+        public bool Initialized => _state > EStoreSetupState.Initializing;
+        public bool NotInitialize => _state == EStoreSetupState.None;
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
 
@@ -264,8 +265,15 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshPurchases(string sku)
         {
-            if (_isFetchingPurchases)
+            if (_isFetchingProducts || _storeController == null)
                 return;
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
 
             _isFetchingPurchases = true;
             _storeController.FetchPurchases();
@@ -296,7 +304,7 @@ namespace GameWarriors.VendorDomian.Core
                 return;
             }
 
-            if (!IsInitialized)
+            if (NotInitialize)
             {
                 bool isSuccess = await TryConnecting();
                 if (!isSuccess)

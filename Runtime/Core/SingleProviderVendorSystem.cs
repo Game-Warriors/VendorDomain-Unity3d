@@ -17,7 +17,7 @@ namespace GameWarriors.VendorDomian.Core
 
         IEnumerable<IProductItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
 
-        public bool IsInitialized => _defaultMarket.IsInitialized;
+        public bool IsInitialized => _defaultMarket.Initialized;
 
         public bool IsProductFetched => _defaultMarket.IsProductFetched;
 

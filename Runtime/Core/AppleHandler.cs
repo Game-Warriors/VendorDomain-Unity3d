@@ -33,7 +33,8 @@ namespace GameWarriors.VendorDomian.Core
         public IEnumerable<IProductItem> PurchaseItems => _productsNameTable != null
             ? _productsNameTable.Values
             : Array.Empty<IProductItem>();
-        public bool IsInitialized => _state > EStoreSetupState.Initializing;
+        public bool Initialized => _state > EStoreSetupState.Initializing;
+        public bool NotInitialize => _state == EStoreSetupState.None;
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
 
@@ -137,7 +138,7 @@ namespace GameWarriors.VendorDomian.Core
                     _productsSkuTable.Add(product.OffProductId, product);
             }
 
-            if (IsInitialized)
+            if (Initialized)
                 RefreshProducts();
         }
 
@@ -216,7 +217,7 @@ namespace GameWarriors.VendorDomian.Core
                 return;
             }
 
-            if (!IsInitialized)
+            if (NotInitialize)
             {
                 bool isSuccess = await TryConnecting();
                 if (!isSuccess)

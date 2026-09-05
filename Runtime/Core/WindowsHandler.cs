@@ -24,7 +24,8 @@ namespace GameWarriors.VendorDomian.Core
         public string VendorLink => string.Empty;
         public int? UnconsumePurchaseCount => _unconsumePurchases?.Count;
         public bool HasValidation => false;
-        bool IMarketHandler.IsInitialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.NotInitialize => _state == EStoreSetupState.None;
+        bool IMarketHandler.Initialized => _state > EStoreSetupState.Initializing;
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
         public bool IsLoading => _productsNameTable == null;

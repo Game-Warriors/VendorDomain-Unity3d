@@ -1,3 +1,6 @@
+    version : 0.2.9
+    improvement on handlers initialization state.
+
     version : 0.2.8
     some fix on iOS handler.
 

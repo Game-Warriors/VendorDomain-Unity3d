@@ -40,7 +40,8 @@ namespace GameWarriors.VendorDomian.Core
         public string MarketPackageName => "com.farsitel.bazaar";
 
         public bool IsLoading => _productsNameTable == null;
-        public bool IsInitialized => _state > EStoreSetupState.Initializing;
+        public bool NotInitialize => _state  == EStoreSetupState.None;
+        public bool Initialized => _state > EStoreSetupState.Initializing;
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
 
@@ -127,7 +128,7 @@ namespace GameWarriors.VendorDomian.Core
                 _productsSkuTable.Add(product.Id, product);
             }
 
-            if (IsInitialized)
+            if (Initialized)
                 RefreshProducts();
         }
 
@@ -186,7 +187,7 @@ namespace GameWarriors.VendorDomian.Core
                 return;
             }
 
-            if (!IsInitialized)
+            if (NotInitialize)
             {
                 bool isSuccess = await TryConnecting();
                 if (!isSuccess)
@@ -310,9 +311,16 @@ namespace GameWarriors.VendorDomian.Core
 
         public async void RefreshProducts()
         {
-            if (_isFetchingProducts || _storeController == null ||
-                _productsNameTable == null || _state < EStoreSetupState.Initialized)
+            if (_isFetchingProducts || _storeController == null)
                 return;
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
+
             var products = new string[_productsNameTable.Count];
             int count = 0;
             foreach (var item in _productsNameTable.Values)

@@ -29,7 +29,8 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, MyketPurchase> _orderTable;
 
         public bool IsLoading => _productsNameTable == null;
-        public bool IsInitialized => _state > EStoreSetupState.Initializing;
+        public bool NotInitialize => _state == EStoreSetupState.None;
+        public bool Initialized => _state > EStoreSetupState.Initializing;
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
 
@@ -195,7 +196,7 @@ namespace GameWarriors.VendorDomian.Core
                 _productsSkuTable.Add(product.Id, product);
             }
 
-            if (IsInitialized)
+            if (Initialized)
                 RefreshProducts();
         }
 
@@ -236,7 +237,7 @@ namespace GameWarriors.VendorDomian.Core
         {
             if (_orderTable.Remove(purchase.PurchaseToken))
             {
-               
+
             }
         }
 
@@ -317,8 +318,15 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshPurchases(string sku)
         {
-            if (_isFetchingProducts || _productsNameTable == null || _state < EStoreSetupState.Initialized)
+            if (_isFetchingProducts)
                 return;
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                MyketIAB.init(_key);
+                return;
+            }
             _isFetchingProducts = true;
             MyketIAB.queryPurchases();
         }
@@ -344,13 +352,13 @@ namespace GameWarriors.VendorDomian.Core
         {
             IProductItem purchaseItem = GetProductNameById(sku);
 
-            if (!IsInitialized)
+            if (NotInitialize)
             {
                 MyketIAB.init(_key);
                 await Task.Delay(1000);
             }
 
-            if (!IsInitialized)
+            if (NotInitialize)
             {
                 _vendorEventListener.PurchasedFailed(Id, purchaseItem, 0, "store not initializaed");
                 return;

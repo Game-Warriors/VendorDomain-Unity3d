@@ -7,7 +7,8 @@ namespace GameWarriors.VendorDomian.Abstraction
 
     public interface IMarketHandler
     {
-        bool IsInitialized { get; }
+        bool NotInitialize { get; }
+        bool Initialized { get; }
         bool IsLoading { get; }
         string Id { get; }
         string MarketPackageName { get; }
