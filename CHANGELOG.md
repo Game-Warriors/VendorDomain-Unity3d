@@ -1,3 +1,6 @@
+    version : 0.3.0
+    fix myket handler get item by name bug.
+
     version : 0.2.9
     improvement on handlers initialization state.
 

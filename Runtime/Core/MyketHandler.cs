@@ -136,6 +136,7 @@ namespace GameWarriors.VendorDomian.Core
                     product.SetMetaData(new MyketProductMeta(item, floatPrice));
                 }
             }
+            _vendorEventListener.OnProductItemsUpdate(Id);
         }
 
         private void queryInventorySucceededEvent(List<MyketPurchase> purchases, List<MyketSkuInfo> skuInfo)
@@ -152,6 +153,7 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
             SetState(EStoreSetupState.FetchProducts);
+            _vendorEventListener.OnProductItemsUpdate(Id);
             queryPurchasesSucceededEvent(purchases);
             SetState(EStoreSetupState.FetchPurchases);
             _vendorEventListener.OnSubscriptionsUpdate(Id);
@@ -261,7 +263,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public IProductItem GetProductByName(string itemName)
         {
-            if (_productsNameTable.TryGetValue(Id, out var item))
+            if (_productsNameTable.TryGetValue(itemName, out var item))
             {
                 return item;
             }

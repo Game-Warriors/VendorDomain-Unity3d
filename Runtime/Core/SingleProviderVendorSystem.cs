@@ -68,8 +68,13 @@ namespace GameWarriors.VendorDomian.Core
         void IVendor.PurchaseProduct(string packName, bool hasOff)
         {
             IProductItem product = _defaultMarket.GetProductByName(packName);
-            string productId = hasOff && product.HasOff ? product.OffProductId : product.Id;
-            _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());
+            if (product != null)
+            {
+                string productId = hasOff && product.HasOff ? product.OffProductId : product.Id;
+                _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());
+            }
+            else
+                throw new ArgumentNullException($"the product by id {packName} not found");
         }
 
         void IVendor.OpenVendorLocation()

@@ -344,7 +344,7 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
             SetState(EStoreSetupState.FetchProducts);
-            _vendorEventListener.OnPurchaseItemsUpdate(Id);
+            _vendorEventListener.OnProductItemsUpdate(Id);
             RefreshPurchases(string.Empty);
         }
 

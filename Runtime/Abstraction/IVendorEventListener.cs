@@ -14,7 +14,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         void OnError(string marketId, int state, string error);
         void ConsumeSuccess(string marketId, IProductItem purchaseItem, string token, string transactionId);
         void ConsumeFailed(string marketId, IProductItem purchaseItem, string token, string transactionId);
-        void OnPurchaseItemsUpdate(string marketId);
+        void OnProductItemsUpdate(string marketId);
         void OnSubscriptionsUpdate(string marketId);
     }
 }

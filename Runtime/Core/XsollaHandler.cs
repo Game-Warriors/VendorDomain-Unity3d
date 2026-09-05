@@ -400,7 +400,7 @@ namespace GameWarriors.VendorDomian.Core
 
             SetState(EStoreSetupState.FetchProducts);
             _storeController.FetchPurchases();
-            _vendorEventListener.OnPurchaseItemsUpdate(Id);
+            _vendorEventListener.OnProductItemsUpdate(Id);
         }
 
         private void OnProductsFetchFailed(ProductFetchFailed failed)
