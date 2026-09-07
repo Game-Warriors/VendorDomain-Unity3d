@@ -35,7 +35,7 @@ The package currently includes handlers for:
 - Windows and Editor fallback flows
 
 > The package's existing namespace is `GameWarriors.VendorDomian` (including the `Domian` spelling). Use that spelling in imports.
-> **Note:** the Google, Apple and Xsolla handler need unity purchase package version 5.4.2 above.
+> **Note:** The Google, Apple, and Xsolla handlers require Unity IAP 5.4.2 or newer.
 ## Features
 
 - One purchasing API across supported markets
@@ -45,7 +45,10 @@ The package currently includes handlers for:
 - Product bundles containing one or more game currencies
 - Store initialization and fetch-state notifications
 - Fresh purchase and recovered-unconfirmed-purchase identification
+- Deferred purchase notifications through `PurchasedDelayed`
 - Transaction receipt and transaction ID forwarding
+- Store-disconnection and product/purchase-fetch failure reporting
+- Retry-safe purchase confirmation with distinct consume success and failure events
 - Subscription expiration information
 - Store-page and native rating operations
 - Read-only configuration abstraction through `IVendorConfigurationObject`
@@ -57,9 +60,10 @@ The package currently includes handlers for:
 - Unity Purchasing 5.x; version 5.4.2 is currently tested
 - An `IServiceProvider` containing the services required by the selected handlers
 - Store products configured in App Store Connect or Google Play Console with identifiers matching the Unity configuration
-- To using Bazaar handler the [Poolakey SDK package](https://github.com/Game-Warriors/Poolakey-sdk) should also import into project
-- To using Myket handler the [Myket SDK package](https://github.com/Game-Warriors/Myket-sdk) should also import into project
-- To using Xsolla handler the [Xsolla SDK package](https://github.com/Game-Warriors/Xsolla-unity3d) should also import into project
+- To use the Bazaar handler, also import the [Poolakey SDK package](https://github.com/Game-Warriors/Poolakey-sdk).
+- To use the Myket handler, also import the [Myket SDK package](https://github.com/Game-Warriors/Myket-sdk).
+- To use the Xsolla handler, also import the [Xsolla SDK package](https://github.com/Game-Warriors/Xsolla-unity3d).
+
 For Google Play and Apple App Store, install Unity IAP through Package Manager:
 
 ```text
@@ -199,7 +203,6 @@ public sealed class GameMarketGroup : IMarketGroup
 
 ```csharp
 using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
 using GameWarriors.VendorDomian.Enums;
 using UnityEngine;
 
@@ -207,7 +210,7 @@ public sealed class GameVendorEvents : IVendorEventListener
 {
     public void PurchasedSuccessful(
         string marketId,
-        VendorPurchaseItem purchaseItem,
+        IProductItem purchaseItem,
         string currencyType,
         long purchaseTime,
         string receipt,
@@ -227,18 +230,35 @@ public sealed class GameVendorEvents : IVendorEventListener
         }
 
         // Validate/persist the receipt, then grant purchaseItem.CurrenciesData.
+        // After fulfillment succeeds, call IVendor.ConsumePurchase(transactionId).
     }
 
-    public void ConsumeSuccess(string marketId, VendorPurchaseItem item,
+    public void PurchasedDelayed(
+        string marketId,
+        IProductItem purchaseItem,
+        string currencyType,
+        long purchaseTime,
+        string receipt,
+        string transactionId,
+        EPurchaseOrigin purchaseOrigin)
+    {
+        // Payment or approval is still pending. Do not grant or confirm it.
+        // Deferred orders can have an empty receipt and transactionId.
+    }
+
+    public void ConsumeSuccess(string marketId, IProductItem item,
         string receipt, string transactionId) { }
 
-    public void ConsumeFailed(string marketId, VendorPurchaseItem item,
-        string receipt, string transactionId) { }
+    public void ConsumeFailed(string marketId, IProductItem item,
+        string receipt, string transactionId)
+    {
+        // Confirmation failed. The pending order remains available for retry.
+    }
 
-    public void PurchasedFailed(string marketId, VendorPurchaseItem item,
+    public void PurchasedFailed(string marketId, IProductItem item,
         int state, string error) => Debug.LogError(error);
 
-    public void UserCancelPurchase(string marketId, VendorPurchaseItem item,
+    public void UserCancelPurchase(string marketId, IProductItem item,
         string error) { }
 
     public void StoreInitializeFailed(string marketId, string error) =>
@@ -250,7 +270,7 @@ public sealed class GameVendorEvents : IVendorEventListener
     public void OnVendorStateChanged(string marketId,
         EStoreSetupState setupState) { }
 
-    public void OnPurchaseItemsUpdate(string marketId) { }
+    public void OnProductItemsUpdate(string marketId) { }
     public void OnSubscriptionsUpdate(string marketId) { }
 }
 ```
@@ -303,7 +323,7 @@ You can also react to `OnVendorStateChanged` instead of polling.
 
 ## Purchase lifecycle
 
-Google and Apple follow this lifecycle:
+Google, Apple, and Xsolla use the Unity IAP 5.4 order lifecycle:
 
 ```text
 Connect to store
@@ -312,26 +332,37 @@ Connect to store
     -> Ready
 
 PurchaseProduct
-    -> PurchasedSuccessful(FreshPurchase)
-    -> Confirm purchase
-    -> ConsumeSuccess
+    -> PendingOrder
+        -> PurchasedSuccessful(FreshPurchase)
+        -> Validate, persist, and grant idempotently
+        -> ConsumePurchase(transactionId)
+            -> ConfirmedOrder -> ConsumeSuccess and remove pending order
+            -> FailedOrder -> ConsumeFailed and retain pending order for retry
+    -> DeferredOrder
+        -> PurchasedDelayed (do not grant or confirm)
+    -> FailedOrder
+        -> PurchasedFailed or UserCancelPurchase
 
 FetchPurchases with an unfinished order
     -> PurchasedSuccessful(RecoveredUnconfirmedPurchase)
-    -> Confirm purchase
-    -> ConsumeSuccess
+    -> Validate/persist idempotently
+    -> ConsumePurchase(transactionId)
 ```
 
 The handlers disable Unity IAP's automatic rerouting of fetched pending orders. This lets them reliably distinguish a new purchase from an unfinished transaction returned by `FetchPurchases()`.
 
 `RecoveredUnconfirmedPurchase` does not mean a restored entitlement. Restored non-consumables and subscriptions normally appear as confirmed orders. It means that the store returned an order that had not previously been confirmed.
 
+`ConsumePurchase` returns `true` when confirmation starts. It returns `false` when the transaction is unknown, the handler has no store controller, or confirmation for the same transaction is already in progress. A confirmation failure leaves the order pending so it can be retried safely.
+
+Store disconnections and purchase-fetch failures reset their operation state and are reported through `OnError`. Deferred purchases are reported separately through `PurchasedDelayed`; they are not purchase or consumption failures.
+
 ## Using the vendor API
 
 ### List products
 
 ```csharp
-foreach (VendorPurchaseItem item in vendorData.PurchaseItems)
+foreach (IProductItem item in vendorData.PurchaseItems)
 {
     Debug.Log($"{item.Name}: {item.ItemMeta?.LocalisedPrice}");
 }
@@ -436,6 +467,14 @@ When using `VendorDefaultResourceLoader`, verify that the asset is under a `Reso
 ### A recovered purchase grants rewards twice
 
 Persist every successful `transactionId` and check it before granting rewards. Treat purchase callbacks as retryable delivery notifications.
+
+### Purchase confirmation fails
+
+Handle `ConsumeFailed` as a retryable acknowledgement failure. The handler retains the pending order, so call `ConsumePurchase(transactionId)` again after connectivity returns. Repeated calls while the same confirmation is already running return `false`.
+
+### A purchase is delayed
+
+Handle `PurchasedDelayed` by informing the player that payment or approval is pending. Do not grant content or call `ConsumePurchase` until the handler later reports `PurchasedSuccessful`.
 
 ### Purchase buttons are used too early
 

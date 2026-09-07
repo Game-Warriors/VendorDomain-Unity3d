@@ -40,7 +40,7 @@ namespace GameWarriors.VendorDomian.Core
         public string MarketPackageName => "com.farsitel.bazaar";
 
         public bool IsLoading => _productsNameTable == null;
-        public bool NotInitialize => _state  == EStoreSetupState.None;
+        public bool NotInitialize => _state == EStoreSetupState.None;
         public bool Initialized => _state > EStoreSetupState.Initializing;
         bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
         bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
@@ -201,6 +201,7 @@ namespace GameWarriors.VendorDomian.Core
             {
                 if (result.data.purchaseState == PurchaseInfo.State.Purchased)
                 {
+                    _orderTable.TryAdd(result.data.purchaseToken, result.data);
                     _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
                                     result.data.purchaseTime,
                                     result.data.orderId, result.data.purchaseToken, EPurchaseOrigin.FreshPurchase);
@@ -265,7 +266,7 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     if (item.purchaseState == PurchaseInfo.State.Purchased && product.Type == EProductType.Consumable)
                     {
-                        _orderTable.Add(item.purchaseToken, item);
+                        _orderTable.TryAdd(item.purchaseToken, item);
                     }
                     else if (item.purchaseState == PurchaseInfo.State.Purchased || item.purchaseState == PurchaseInfo.State.Consumed
                         && product.Type == EProductType.Subscription)

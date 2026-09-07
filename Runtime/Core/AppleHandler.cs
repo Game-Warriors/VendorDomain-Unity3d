@@ -20,6 +20,7 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, IProductItem> _productsSkuTable;
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
         private Dictionary<string, PendingOrder> _orderTable;
+        private readonly HashSet<string> _confirmingTransactions = new();
         private EStoreSetupState _state;
         private bool _isFetchingProducts;
         private bool _isFetchingPurchases;
@@ -77,6 +78,7 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
             _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
             _storeController.OnStoreConnected += OnStoreConnected;
+            _storeController.OnStoreDisconnected += OnStoreDisconnected;
 
             await TryConnecting();
         }
@@ -95,7 +97,9 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnPurchaseConfirmed -= OnPurchaseConfirmed;
             _storeController.OnPurchaseDeferred -= OnPurchaseDeferred;
             _storeController.OnStoreConnected -= OnStoreConnected;
+            _storeController.OnStoreDisconnected -= OnStoreDisconnected;
             _storeController = null;
+            _confirmingTransactions.Clear();
         }
 
         private async System.Threading.Tasks.Task<bool> TryConnecting()
@@ -147,6 +151,12 @@ namespace GameWarriors.VendorDomian.Core
             _subscriptionsTable = new Dictionary<string, SubscriptionInfo>();
             SetState(EStoreSetupState.Initialized);
             RefreshProducts();
+        }
+
+        private void OnStoreDisconnected(StoreConnectionFailureDescription description)
+        {
+            SetState(EStoreSetupState.None);
+            _vendorEventListener.OnError(Id, -1, description.Message);
         }
 
         public void RefreshProducts()
@@ -263,6 +273,23 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseConfirmed(Order order)
         {
+            _confirmingTransactions.Remove(order.Info.TransactionID);
+
+            if (order is FailedOrder)
+            {
+                foreach (CartItem item in order.CartOrdered.Items())
+                {
+                    Product product = item.Product;
+                    IProductItem purchaseItem = GetProductNameById(product.definition.id);
+                    _vendorEventListener.ConsumeFailed(Id, purchaseItem,
+                        order.Info.Receipt, order.Info.TransactionID);
+                }
+                return;
+            }
+
+            if (order is not ConfirmedOrder)
+                return;
+
             _orderTable?.Remove(order.Info.TransactionID);
             foreach (CartItem item in order.CartOrdered.Items())
             {
@@ -275,13 +302,13 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseDeferred(DeferredOrder order)
         {
-            _orderTable?.Remove(order.Info.TransactionID);
             foreach (CartItem item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
                 IProductItem purchaseItem = GetProductNameById(product.definition.id);
-                _vendorEventListener.ConsumeFailed(Id, purchaseItem,
-                    order.Info.Receipt, order.Info.TransactionID);
+                _vendorEventListener.PurchasedDelayed(Id, purchaseItem, product.metadata.isoCurrencyCode,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), order.Info.Receipt,
+                    order.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
             }
         }
 
@@ -360,7 +387,8 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchasesFetchFailed(PurchasesFetchFailureDescription failure)
         {
-            _vendorEventListener?.OnError(Id, 0, failure.ToString());
+            _isFetchingPurchases = false;
+            _vendorEventListener?.OnError(Id, (int)failure.FailureReason, failure.Message);
         }
 
         public IProductItem GetProductByName(string itemName)
@@ -419,12 +447,13 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool ConsumePurchase(string transactionId)
         {
-            if (_orderTable != null && _orderTable.Remove(transactionId, out PendingOrder order))
-            {
-                _storeController?.ConfirmPurchase(order);
-                return true;
-            }
-            return false;
+            if (_storeController == null || _orderTable == null ||
+                !_orderTable.TryGetValue(transactionId, out PendingOrder order) ||
+                !_confirmingTransactions.Add(transactionId))
+                return false;
+
+            _storeController.ConfirmPurchase(order);
+            return true;
         }
 
         private void RestorePurchases()

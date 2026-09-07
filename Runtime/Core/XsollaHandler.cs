@@ -30,6 +30,7 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, IProductItem> _productsSkuTable;
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
         private Dictionary<string, PendingOrder> _orderTable;
+        private readonly HashSet<string> _confirmingTransactions = new();
 
         public string Id => MarketId.XSOLLA;
         public string MarketPackageName => throw new NotSupportedException();
@@ -69,7 +70,21 @@ namespace GameWarriors.VendorDomian.Core
 
         public void Dispose()
         {
-            return;
+            if (_storeController == null)
+                return;
+
+            _storeController.OnPurchasePending -= OnPurchasePending;
+            _storeController.OnPurchasesFetched -= OnPurchasesFetched;
+            _storeController.OnPurchasesFetchFailed -= OnPurchasesFetchFailed;
+            _storeController.OnPurchaseFailed -= OnPurchaseFailed;
+            _storeController.OnProductsFetched -= OnProductsFetched;
+            _storeController.OnProductsFetchFailed -= OnProductsFetchFailed;
+            _storeController.OnPurchaseConfirmed -= OnPurchaseConfirmed;
+            _storeController.OnPurchaseDeferred -= OnPurchaseDeferred;
+            _storeController.OnStoreConnected -= StoreConnected;
+            _storeController.OnStoreDisconnected -= StoreDisconnected;
+            _storeController = null;
+            _confirmingTransactions.Clear();
         }
 
         public async void Initialization(IServiceProvider serviceProvider)
@@ -89,17 +104,22 @@ namespace GameWarriors.VendorDomian.Core
                 .SetConfiguration(configuration)
                 .Build();
 
-            StoreController storeController = module.CreateStoreController();
-            IXsollaPurchasingStoreExtension xsolla = module.GetStoreExtension();
+            if (_storeController != null)
+                return;
+
+            _storeController = module.CreateStoreController();
+            _storeController.ProcessPendingOrdersOnPurchasesFetched(false);
 
             _storeController.OnPurchasePending += OnPurchasePending;
             _storeController.OnPurchasesFetched += OnPurchasesFetched;
+            _storeController.OnPurchasesFetchFailed += OnPurchasesFetchFailed;
             _storeController.OnPurchaseFailed += OnPurchaseFailed;
             _storeController.OnProductsFetched += OnProductsFetched;
             _storeController.OnProductsFetchFailed += OnProductsFetchFailed;
             _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
             _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
             _storeController.OnStoreConnected += StoreConnected;
+            _storeController.OnStoreDisconnected += StoreDisconnected;
             await TryConnecting();
         }
 
@@ -142,20 +162,41 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseDeferred(DeferredOrder order)
         {
-            _orderTable.Remove(order.Info.TransactionID, out _);
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
                 if (!string.IsNullOrEmpty(product.definition.id))
                 {
                     IProductItem purchaseItem = GetProductNameById(product.definition.id);
-                    _vendorEventListener.ConsumeFailed(Id, purchaseItem, order.Info.Receipt, order.Info.TransactionID);
+                    _vendorEventListener.PurchasedDelayed(Id, purchaseItem, product.metadata.isoCurrencyCode,
+                        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), order.Info.Receipt,
+                        order.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
                 }
             }
         }
 
         private void OnPurchaseConfirmed(Order order)
         {
+            _confirmingTransactions.Remove(order.Info.TransactionID);
+
+            if (order is FailedOrder)
+            {
+                foreach (var item in order.CartOrdered.Items())
+                {
+                    Product product = item.Product;
+                    if (!string.IsNullOrEmpty(product.definition.id))
+                    {
+                        IProductItem purchaseItem = GetProductNameById(product.definition.id);
+                        _vendorEventListener.ConsumeFailed(Id, purchaseItem, order.Info.Receipt, order.Info.TransactionID);
+                    }
+                }
+                return;
+            }
+
+            if (order is not ConfirmedOrder)
+                return;
+
+            _orderTable?.Remove(order.Info.TransactionID);
             foreach (var item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -241,9 +282,21 @@ namespace GameWarriors.VendorDomian.Core
             RefreshProducts();
         }
 
+        private void StoreDisconnected(StoreConnectionFailureDescription description)
+        {
+            SetState(EStoreSetupState.None);
+            _vendorEventListener.OnError(Id, -1, description.Message);
+        }
+
+        private void OnPurchasesFetchFailed(PurchasesFetchFailureDescription description)
+        {
+            _isFetchingPurchases = false;
+            _vendorEventListener.OnError(Id, (int)description.FailureReason, description.Message);
+        }
+
         public void RefreshProducts()
         {
-            if (_storeController == null)
+            if (_isFetchingProducts || _storeController == null)
                 return;
 
             if (_state == EStoreSetupState.Initializing)
@@ -265,7 +318,7 @@ namespace GameWarriors.VendorDomian.Core
 
         public void RefreshPurchases(string sku)
         {
-            if (_isFetchingProducts || _storeController == null)
+            if (_isFetchingPurchases || _storeController == null)
                 return;
             if (_state == EStoreSetupState.Initializing)
                 return;
@@ -331,12 +384,13 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool ConsumePurchase(string transactionId)
         {
-            if (_orderTable.Remove(transactionId, out var order))
-            {
-                _storeController.ConfirmPurchase(order);
-                return true;
-            }
-            return false;
+            if (_storeController == null || _orderTable == null ||
+                !_orderTable.TryGetValue(transactionId, out var order) ||
+                !_confirmingTransactions.Add(transactionId))
+                return false;
+
+            _storeController.ConfirmPurchase(order);
+            return true;
         }
 
         public IProductItem GetProductByName(string id)

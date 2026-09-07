@@ -1,3 +1,6 @@
+    version : 0.3.1
+    update Google, Apple, and Xsolla for the Unity IAP 5.4 lifecycle. Add deferred-purchase notifications, store-disconnection and purchase-fetch failure handling, and retry-safe confirmation outcomes. Fix Xsolla store-controller initialization and fetch guards.
+
     version : 0.3.0
     fix myket handler get item by name bug.
 

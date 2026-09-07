@@ -111,7 +111,7 @@ namespace GameWarriors.VendorDomian.Core
                     }
                     else if (product.Type == EProductType.Consumable)
                     {
-                        _orderTable.Add(item.PurchaseToken, item);
+                        _orderTable.TryAdd(item.PurchaseToken, item);
                     }
                 }
             }
@@ -251,6 +251,7 @@ namespace GameWarriors.VendorDomian.Core
         private void purchaseSucceededEvent(MyketPurchase purchase)
         {
             IProductItem purchaseItem = GetProductNameById(purchase.ProductId);
+            _orderTable.TryAdd(purchase.PurchaseToken, purchase);
             _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
                                   purchase.PurchaseTime,
                                   purchase.OrderId, purchase.PurchaseToken, EPurchaseOrigin.FreshPurchase);

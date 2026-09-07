@@ -7,6 +7,8 @@ namespace GameWarriors.VendorDomian.Abstraction
     {
         void OnVendorStateChanged(string marketId, EStoreSetupState setupState);
         void PurchasedFailed(string marketId, IProductItem purchaseItem, int state, string error);
+        void PurchasedDelayed(string marketId, IProductItem purchaseItem, string currencyType,
+            long purchaseTime, string orderId, string transactionId, EPurchaseOrigin purchaseOrigin);
         void PurchasedSuccessful(string marketId, IProductItem purchaseItem, string currencyType,
             long purchaseTime, string orderId, string transactionId, EPurchaseOrigin purchaseOrigin);
         void StoreInitializeFailed(string marketId, string error);
