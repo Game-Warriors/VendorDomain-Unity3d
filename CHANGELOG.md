@@ -1,3 +1,6 @@
+    version : 0.3.3
+    add build tools helpers for: myket,bazaar and xsolla, add usage doc in readme
+
     version : 0.3.2
     extract the shared Unity IAP logic of the Google, Apple, and Xsolla handlers into the new UnityIapMarketHandlerBase class. The base class owns the store lifecycle, product and subscription tables, order handling, and all store controller callbacks, so each market only provides its store controller, store links, configuration fields, and purchase refresh behavior. Align the three handlers on the corrected behavior: unsubscribe store events on dispose, register off product ids in the sku table, guard duplicate and null subscription info, and report the pending order receipt when recovering a duplicate purchase failure.
 
