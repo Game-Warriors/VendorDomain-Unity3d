@@ -12,6 +12,7 @@
 - [Store setup](#store-setup)
 - [Product configuration](#product-configuration)
 - [Integration](#integration)
+- [Single market setup](#single-market-setup)
 - [Purchase lifecycle](#purchase-lifecycle)
 - [Using the vendor API](#using-the-vendor-api)
 - [Subscriptions](#subscriptions)
@@ -157,11 +158,59 @@ Integration requires:
 
 1. An `IVendorResourceLoader`
 2. An `IVendorEventListener`
-3. An `IMarketGroup` containing the desired handler
+3. A market handler, supplied either directly or through an optional `IMarketGroup`
 4. A service provider that exposes the listener and loader
-5. A `VendorSystem` initialized after its configuration has loaded
+5. A vendor system initialized after its configuration has loaded
 
-### Create a market group
+Two vendor systems are available, and they differ only in how step 3 is provided:
+
+| System | Market source | Use when |
+| --- | --- | --- |
+| `SingleProviderVendorSystem` | one `IMarketHandler` | the build targets a single store |
+| `VendorSystem` | an `IMarketGroup` | the build has to hold more than one store, or switch the active one at runtime |
+
+`IMarketGroup` is optional. If a build ships with a single store, skip it and pass the handler directly; see [Single market setup](#single-market-setup). The rest of this section describes the market group route.
+
+### Create a market group (optional)
+
+`IMarketGroup` is a small read-only description of the markets a build carries:
+
+```csharp
+public interface IMarketGroup
+{
+    string InitialDefaultMarketId { get; }
+    IEnumerable<IMarketHandler> Markets { get; }
+}
+```
+
+`Markets` holds every handler the build can use, and `InitialDefaultMarketId` selects which one is active at startup. If no market in the group matches that id, `VendorSystem` falls back to the first market in `Markets`. Implement it only when a build genuinely carries more than one store, for example a Google Play build that can also sell through Xsolla:
+
+```csharp
+using System.Collections.Generic;
+using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Constants;
+using GameWarriors.VendorDomian.Core;
+
+public sealed class MultiMarketGroup : IMarketGroup
+{
+    public string InitialDefaultMarketId { get; }
+    public IEnumerable<IMarketHandler> Markets { get; }
+
+    public MultiMarketGroup(IVendorResourceLoader resourceLoader)
+    {
+        InitialDefaultMarketId = MarketId.GOOGLE;
+        Markets = new IMarketHandler[]
+        {
+            new GoogleHandler(resourceLoader),
+            new XsollaHandler(resourceLoader)
+        };
+    }
+}
+```
+
+Each market in the group needs its own configuration asset, named after its `MarketId`, and every handler in the group must have its scripting define symbol set in that build.
+
+A group can also carry exactly one market per platform, which keeps the `VendorSystem` API available without maintaining a second store:
 
 ```csharp
 using System;
@@ -196,6 +245,39 @@ public sealed class GameMarketGroup : IMarketGroup
     }
 }
 ```
+
+### Use a market group
+
+Register the group in the service provider and pass it to `VendorSystem`:
+
+```csharp
+var marketGroup = new MultiMarketGroup(loader);
+provider.SetSingletonService(typeof(IMarketGroup), marketGroup);
+
+var vendorSystem = new VendorSystem(provider, marketGroup);
+await vendorSystem.WaitForLoading();
+vendorSystem.Initialization();
+```
+
+`VendorSystem` then treats the group as follows:
+
+| Call | Effect on the group |
+| --- | --- |
+| `WaitForLoading` / `WaitForLoadingCoroutine` | calls `StartLoading` on every market and waits until none of them reports `IsLoading` |
+| `Initialization` | initializes every market in the group, so each handler connects to its own store |
+| `IVendor.ChangeDefaultMarket(id)` | makes the market with that id the active one |
+| every other `IVendor` and `IDefaultVendorData` member | is forwarded to the active market only |
+
+`IDefaultVendorData.MarketId` reports which market is currently active, which is useful after a switch:
+
+```csharp
+vendor.ChangeDefaultMarket(MarketId.XSOLLA);
+Debug.Log(vendorData.MarketId);
+```
+
+Because every market is initialized, a group with several stores connects to all of them at startup and each one needs a valid configuration asset. Keep the group to the markets a build actually sells through.
+
+> **Note:** `VendorSystem.ChangeDefaultMarket` currently only compares the first market in the group before returning, so switching is reliable only when the requested market happens to be the first one registered.
 
 ### Implement purchase events
 
@@ -275,7 +357,7 @@ public sealed class GameVendorEvents : IVendorEventListener
 }
 ```
 
-### Build the vendor system
+### Build the vendor system with a market group
 
 The example below uses `ServiceProvider` from the Game Warriors Dependency Injection package. Any `IServiceProvider` implementation is valid if it returns the registered objects from `GetService(Type)`.
 
@@ -320,6 +402,99 @@ bool canPurchase = vendor.IsInitialized
 ```
 
 You can also react to `OnVendorStateChanged` instead of polling.
+
+## Single market setup
+
+Most builds target one store at a time, selected by a scripting define symbol. `SingleProviderVendorSystem` covers that case: it implements the same `IVendor` and `IDefaultVendorData` API as `VendorSystem`, but takes an `IMarketHandler` directly, so no `IMarketGroup` implementation is required.
+
+```csharp
+public SingleProviderVendorSystem(IServiceProvider serviceProvider, IMarketHandler marketHandler)
+```
+
+### Build the vendor system with one handler
+
+```csharp
+using System;
+using GameWarriors.DependencyInjection.Core;
+using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Core;
+using UnityEngine;
+
+public sealed class SingleVendorStartup : MonoBehaviour
+{
+    public IVendor Vendor { get; private set; }
+    public IDefaultVendorData VendorData { get; private set; }
+
+    private async void Awake()
+    {
+        var provider = new ServiceProvider();
+        var loader = new VendorDefaultResourceLoader();
+        var listener = new GameVendorEvents();
+
+        provider.SetSingletonService(typeof(IVendorResourceLoader), loader);
+        provider.SetSingletonService(typeof(IVendorEventListener), listener);
+
+        IMarketHandler marketHandler = CreateMarketHandler(loader);
+
+        var vendorSystem = new SingleProviderVendorSystem(provider, marketHandler);
+        await vendorSystem.WaitForLoading();
+        vendorSystem.Initialization();
+
+        Vendor = vendorSystem;
+        VendorData = vendorSystem;
+    }
+
+    private static IMarketHandler CreateMarketHandler(IVendorResourceLoader loader)
+    {
+#if GOOGLE
+        return new GoogleHandler(loader);
+#elif APPLE
+        return new AppleHandler(loader);
+#elif XSOLLA
+        return new XsollaHandler(loader);
+#else
+        throw new PlatformNotSupportedException(
+            "Configure a market handler for the current platform.");
+#endif
+    }
+}
+```
+
+`IMarketGroup` is not registered in the service provider, but `IVendorResourceLoader` and `IVendorEventListener` still are: `WaitForLoading` resolves the loader, and the handler resolves the listener during `Initialization`.
+
+### Waiting without async/await
+
+`SingleProviderVendorSystem` also exposes a coroutine variant of the loading wait, for startup flows that are not `async`:
+
+```csharp
+private IEnumerator Start()
+{
+    yield return vendorSystem.WaitForLoadingCoroutine();
+    vendorSystem.Initialization();
+}
+```
+
+Both variants call `StartLoading` on the handler and then wait until `IsLoading` becomes `false`. Call `Initialization()` only after the wait completes, so the configured products are available to the store connection.
+
+### Differences from `VendorSystem`
+
+| Topic | `VendorSystem` | `SingleProviderVendorSystem` |
+| --- | --- | --- |
+| Constructor dependency | `IMarketGroup` | a single `IMarketHandler` |
+| Active market | `InitialDefaultMarketId`, or the first market in the group | the handler passed to the constructor |
+| `IVendor.ChangeDefaultMarket` | switches the active market | throws `NotSupportedException` |
+| Loading wait | waits for every market in the group | waits for the single handler |
+| `IDefaultVendorData.MarketId` | id of the active market | id of the handler |
+
+Everything else behaves identically: readiness flags, purchase flow, consumption, subscriptions, store page, and rating calls are forwarded to the single handler.
+
+```csharp
+bool canPurchase = vendor.IsInitialized
+                   && vendor.IsProductFetched
+                   && vendor.IsPurchasesFetched;
+```
+
+Because `ChangeDefaultMarket` is not supported, do not expose a market-switching UI when this system is used. If a build has to select between stores at runtime, use `VendorSystem` with an `IMarketGroup` instead.
 
 ## Purchase lifecycle
 

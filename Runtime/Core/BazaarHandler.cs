@@ -11,11 +11,11 @@ namespace GameWarriors.VendorDomian.Core
 {
 
 #if BAZAAR
+    using Bazaar.Data;
     using Bazaar.Poolakey;
     using Bazaar.Poolakey.Data;
-    using System.Threading.Tasks;
-    using Bazaar.Data;
     using GameWarriors.VendorDomian.Data.Bazaar;
+    using System.Threading.Tasks;
 
     public class BazaarHandler : IMarketHandler
     {
@@ -210,6 +210,10 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)result.data.purchaseState, result.message);
                 }
+            }
+            if (result.status == Status.Canceled)
+            {
+                _vendorEventListener.UserCancelPurchase(Id, purchaseItem, result.message);
             }
             else if (result.status == Status.InstallBazaar)
             {
