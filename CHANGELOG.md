@@ -1,3 +1,6 @@
+    version : 0.3.6
+    improve deferred initialization
+
     version : 0.3.5
     add state to UserCancelPurchase method in IVendorEventListener interface
 

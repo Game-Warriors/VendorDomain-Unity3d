@@ -178,6 +178,7 @@ namespace GameWarriors.VendorDomian.Core
             {
                 _productsNameTable = new();
                 _productsSkuTable = new();
+                _deferredOrderTable = new();
                 _vendorEventListener?.StoreInitializeFailed(Id, $"The resource for market id {Id} is null.");
                 return;
             }
@@ -185,6 +186,7 @@ namespace GameWarriors.VendorDomian.Core
             OnCatalogLoaded(resource);
             _productsNameTable = new(resource.ItemCounts);
             _productsSkuTable = new(resource.ItemCounts);
+            _deferredOrderTable = new();
             foreach (IProductItem product in resource.Products)
             {
                 _productsNameTable.Add(product.Name, product);
@@ -463,7 +465,7 @@ namespace GameWarriors.VendorDomian.Core
             // The fetched deferred list is authoritative: drop the ones that were declined or
             // cancelled outside the app and only notify about the ones not reported before.
             Dictionary<string, DeferredOrder> previousDeferredOrders = _deferredOrderTable;
-            _deferredOrderTable = new(orders.DeferredOrders.Count);
+            _deferredOrderTable.Clear();
             foreach (DeferredOrder order in orders.DeferredOrders)
             {
                 string key = GetDeferredOrderKey(order);
