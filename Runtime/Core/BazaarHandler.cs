@@ -215,7 +215,7 @@ namespace GameWarriors.VendorDomian.Core
             }
             if (result.status == Status.Canceled)
             {
-                _vendorEventListener.UserCancelPurchase(Id, purchaseItem, result.message);
+                _vendorEventListener.UserCancelPurchase(Id, purchaseItem, (int)result.data.purchaseState, result.message);
             }
             else if (result.status == Status.InstallBazaar)
             {

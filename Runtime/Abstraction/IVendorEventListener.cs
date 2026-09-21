@@ -12,7 +12,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         void PurchasedSuccessful(string marketId, IProductItem purchaseItem, string currencyType,
             long purchaseTime, string orderId, string transactionId, EPurchaseOrigin purchaseOrigin);
         void StoreInitializeFailed(string marketId, string error);
-        void UserCancelPurchase(string marketId, IProductItem purchaseItem, string error);
+        void UserCancelPurchase(string marketId, IProductItem purchaseItem, int state, string error);
         void OnError(string marketId, int state, string error);
         void ConsumeSuccess(string marketId, IProductItem purchaseItem, string token, string transactionId);
         void ConsumeFailed(string marketId, IProductItem purchaseItem, string token, string transactionId);

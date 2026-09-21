@@ -427,7 +427,7 @@ namespace GameWarriors.VendorDomian.Core
                     }
                 }
                 else if (order.FailureReason == PurchaseFailureReason.UserCancelled)
-                    _vendorEventListener.UserCancelPurchase(Id, purchaseItem, order.Details);
+                    _vendorEventListener.UserCancelPurchase(Id, purchaseItem, (int)order.FailureReason, order.Details);
                 else
                     _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)order.FailureReason, order.Details);
             }

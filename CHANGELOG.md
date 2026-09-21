@@ -1,3 +1,6 @@
+    version : 0.3.5
+    add state to UserCancelPurchase method in IVendorEventListener interface
+
     version : 0.3.4
     add deferred purchase tracking. Add the IDelayPurchaseItem abstraction and DelayPurchaseData, expose DelayPurchaseItems on IMarketHandler and IDefaultVendorData, and forward it from VendorSystem and SingleProviderVendorSystem. Add GetDelayPurchaseItem to IDefaultVendorData and GetDelayPurchaseItemByName to IMarketHandler to find the deferred purchase of a product by name, matching its normal or sale SKU. UnityIapMarketHandlerBase stores Unity IAP deferred orders, rebuilds them from fetched purchases, reports PurchasedDelayed with RecoveredUnconfirmedPurchase only for newly seen deferred orders, and removes a deferred order once it arrives as a pending order. Bazaar, Myket, Windows, and Zarinpal handlers return an empty list and a null item.
 
