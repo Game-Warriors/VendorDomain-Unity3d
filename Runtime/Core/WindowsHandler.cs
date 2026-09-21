@@ -33,6 +33,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems => new IPendingPurchaseItem[0];
 
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems => Array.Empty<IDelayPurchaseItem>();
+
         public WindowsHandler(IPaymentServer paymentServer)
         {
             _paymentServer = paymentServer;
@@ -192,6 +194,11 @@ namespace GameWarriors.VendorDomian.Core
         public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
         {
             return default;
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
+            return null;
         }
 
         public bool ConsumePurchase(string transactionId)

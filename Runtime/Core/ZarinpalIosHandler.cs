@@ -48,6 +48,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems => throw new NotSupportedException();
 
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems => Array.Empty<IDelayPurchaseItem>();
+
         public void Initialization(IServiceProvider serviceProvider)
         {
             IVendorEventListener vendorEvent = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
@@ -243,6 +245,11 @@ namespace GameWarriors.VendorDomian.Core
         public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
         {
             throw new NotSupportedException();
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
+            return null;
         }
 
         public bool ConsumePurchase(string transactionId)

@@ -8,9 +8,11 @@ namespace GameWarriors.VendorDomian.Abstraction
         string MarketId { get; }
         bool IsValidate { get; }
         IEnumerable<IProductItem> PurchaseItems { get; }
+        IEnumerable<IDelayPurchaseItem> DelayPurchaseItems { get; }
         (float, IEnumerable<IProductCurrencyItem>) GetProducePriceAndData(string key);
         IEnumerable<IProductCurrencyItem> GetCurrencyByPurchaseId(string purchaseId);
         ISubscriptionInfo GetSubscriptionInfo(string itemName);
+        IDelayPurchaseItem GetDelayPurchaseItem(string itemName);
         void EnableProductOffState(string itemName);
         void DisableAllProductOffState();
     }

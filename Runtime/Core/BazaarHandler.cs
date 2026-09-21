@@ -59,6 +59,8 @@ namespace GameWarriors.VendorDomian.Core
             }
         }
 
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems => Array.Empty<IDelayPurchaseItem>();
+
         public BazaarHandler(IVendorResourceLoader resourceLoader)
         {
             resourceLoader.LoadAsync(Id, OnLoadDone);
@@ -360,6 +362,11 @@ namespace GameWarriors.VendorDomian.Core
                 if (_subscriptionsTable.TryGetValue(item.Id, out SKUDetails info))
                     return new SubscriptionData(info.subscriptionExpireDate);
             }
+            return null;
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
             return null;
         }
 

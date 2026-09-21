@@ -17,6 +17,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         bool HasValidation { get; }
         IEnumerable<IProductItem> PurchaseItems { get; }
         IEnumerable<IPendingPurchaseItem> PendingPurchaseItems { get; }
+        IEnumerable<IDelayPurchaseItem> DelayPurchaseItems { get; }
         bool IsProductFetched { get; }
         bool IsPurchasesFetched { get; }
 
@@ -33,6 +34,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         IProductItem GetProductByName(string itemName);
         IProductItem GetProductNameById(string productId);
         ISubscriptionInfo GetSubscriptionInfoByName(string itemName);
+        IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName);
         void SetProdcutSalesOffState(string itemName, bool offState);
         void SetAllProdcutSalesOffState(bool state);
     }

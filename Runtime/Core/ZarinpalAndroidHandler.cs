@@ -34,6 +34,8 @@ namespace GameWarriors.VendorDomian.Core
 
         public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems => new IPendingPurchaseItem[0];
 
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems => Array.Empty<IDelayPurchaseItem>();
+
         private async void OnLoadDone(IVendorConfigurationObject resource)
         {
             if (resource == null)
@@ -258,6 +260,11 @@ namespace GameWarriors.VendorDomian.Core
         public ISubscriptionInfo GetSubscriptionInfoByName(string productId)
         {
             throw new NotSupportedException();
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
+            return null;
         }
 
         public bool ConsumePurchase(string transactionId)

@@ -17,6 +17,8 @@ namespace GameWarriors.VendorDomian.Core
 
         IEnumerable<IProductItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
 
+        IEnumerable<IDelayPurchaseItem> IDefaultVendorData.DelayPurchaseItems => _defaultMarket.DelayPurchaseItems;
+
         public bool IsInitialized => _defaultMarket.Initialized;
 
         public bool IsProductFetched => _defaultMarket.IsProductFetched;
@@ -126,6 +128,11 @@ namespace GameWarriors.VendorDomian.Core
         ISubscriptionInfo IDefaultVendorData.GetSubscriptionInfo(string itemName)
         {
             return _defaultMarket?.GetSubscriptionInfoByName(itemName);
+        }
+
+        IDelayPurchaseItem IDefaultVendorData.GetDelayPurchaseItem(string itemName)
+        {
+            return _defaultMarket?.GetDelayPurchaseItemByName(itemName);
         }
 
         public bool ConsumePurchase(string transactionId)

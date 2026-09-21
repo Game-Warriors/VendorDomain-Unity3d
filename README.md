@@ -47,7 +47,7 @@ The package currently includes handlers for:
 - Product bundles containing one or more game currencies
 - Store initialization and fetch-state notifications
 - Fresh purchase and recovered-unconfirmed-purchase identification
-- Deferred purchase notifications through `PurchasedDelayed`
+- Deferred purchase notifications through `PurchasedDelayed` and tracking through `IDefaultVendorData.DelayPurchaseItems` and `GetDelayPurchaseItem`
 - Transaction receipt and transaction ID forwarding
 - Store-disconnection and product/purchase-fetch failure reporting
 - Retry-safe purchase confirmation with distinct consume success and failure events
@@ -516,8 +516,13 @@ PurchaseProduct
             -> FailedOrder -> ConsumeFailed and retain pending order for retry
     -> DeferredOrder
         -> PurchasedDelayed (do not grant or confirm)
+        -> listed in DelayPurchaseItems until it becomes a PendingOrder
     -> FailedOrder
         -> PurchasedFailed or UserCancelPurchase
+
+FetchPurchases with a deferred order
+    -> DelayPurchaseItems is rebuilt from the store result
+    -> PurchasedDelayed(RecoveredUnconfirmedPurchase) only for newly seen orders
 
 FetchPurchases with an unfinished order
     -> PurchasedSuccessful(RecoveredUnconfirmedPurchase)
@@ -568,6 +573,34 @@ vendor.CheckUnconsumePurchase();
 ```
 
 Recovered pending transactions are reported through `PurchasedSuccessful` with `EPurchaseOrigin.RecoveredUnconfirmedPurchase`.
+
+### List deferred purchases
+
+A deferred purchase is waiting for payment or approval, for example a Google Play cash payment or an Apple Ask to Buy request. The active market lists these purchases in `IDefaultVendorData.DelayPurchaseItems`:
+
+```csharp
+foreach (IDelayPurchaseItem item in vendorData.DelayPurchaseItems)
+{
+    Debug.Log($"{item.Product.Name} is awaiting payment or approval ({item.TransactionId})");
+}
+```
+
+To check a single product, use its configured `Name`. The result is `null` when the product has no deferred purchase:
+
+```csharp
+IDelayPurchaseItem delayed = vendorData.GetDelayPurchaseItem("starter_pack");
+bool isAwaitingApproval = delayed != null;
+```
+
+The lookup matches both the normal and the sale SKU of the product.
+
+- A purchase is added to the list when `PurchasedDelayed` is reported.
+- It is removed when the store approves it and it arrives as a pending order through `PurchasedSuccessful`.
+- `CheckUnconsumePurchase()` rebuilds the list from the store. Deferred purchases that were declined or cancelled outside the app are removed. `PurchasedDelayed` is reported with `EPurchaseOrigin.RecoveredUnconfirmedPurchase` only for deferred purchases not seen before.
+- `TransactionId` can be empty while the store has not assigned one yet.
+- Google, Apple, and Xsolla support deferred purchases. Bazaar, Myket, Windows, and Zarinpal always return an empty list, and `GetDelayPurchaseItem` returns `null`.
+
+Do not grant content or call `ConsumePurchase` for these items.
 
 ### Open the store or rating prompt
 
@@ -650,7 +683,7 @@ Handle `ConsumeFailed` as a retryable acknowledgement failure. The handler retai
 
 ### A purchase is delayed
 
-Handle `PurchasedDelayed` by informing the player that payment or approval is pending. Do not grant content or call `ConsumePurchase` until the handler later reports `PurchasedSuccessful`.
+Handle `PurchasedDelayed` by informing the player that payment or approval is pending. Do not grant content or call `ConsumePurchase` until the handler later reports `PurchasedSuccessful`. Read `IDefaultVendorData.DelayPurchaseItems` to show which products are still awaiting payment or approval, for example after an app restart. Markets that do not support deferred payments return an empty list.
 
 ### Purchase buttons are used too early
 

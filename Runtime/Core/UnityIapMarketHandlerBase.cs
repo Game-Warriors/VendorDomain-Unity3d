@@ -30,6 +30,7 @@ namespace GameWarriors.VendorDomian.Core
         private Dictionary<string, IProductItem> _productsSkuTable;
         private Dictionary<string, SubscriptionInfo> _subscriptionsTable;
         private Dictionary<string, PendingOrder> _orderTable;
+        private Dictionary<string, DeferredOrder> _deferredOrderTable;
         private EStoreSetupState _state;
 
         public abstract string Id { get; }
@@ -56,6 +57,24 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     string id = item.Value.Info.PurchasedProductInfo[0].productId;
                     yield return new PendingPurchaseData(_productsSkuTable[id], item.Key);
+                }
+            }
+        }
+
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems
+        {
+            get
+            {
+                if (_deferredOrderTable == null)
+                    yield break;
+
+                foreach (var item in _deferredOrderTable)
+                {
+                    CartItem cartItem = item.Value.CartOrdered.Items()[0];
+                    IProductItem product = GetProductNameById(cartItem.Product.definition.id);
+                    if (product != null)
+                        yield return new DelayPurchaseData(product, item.Value.Info.TransactionID);
+
                 }
             }
         }
@@ -131,6 +150,7 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnStoreDisconnected -= OnStoreDisconnected;
             _storeController = null;
             _confirmingTransactions.Clear();
+            _deferredOrderTable?.Clear();
         }
 
         protected async Task<bool> TryConnecting()
@@ -297,6 +317,7 @@ namespace GameWarriors.VendorDomian.Core
         {
             _orderTable ??= new();
             _orderTable.TryAdd(order.Info.TransactionID, order);
+            RemoveDeferredOrders(order);
             foreach (CartItem item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -338,19 +359,53 @@ namespace GameWarriors.VendorDomian.Core
 
         private void OnPurchaseDeferred(DeferredOrder order)
         {
+            ProcessDeferredOrder(order, EPurchaseOrigin.FreshPurchase);
+        }
+
+        private void ProcessDeferredOrder(DeferredOrder order, EPurchaseOrigin purchaseOrigin)
+        {
+            _deferredOrderTable ??= new();
+            _deferredOrderTable[GetDeferredOrderKey(order)] = order;
             foreach (CartItem item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
                 IProductItem purchaseItem = GetProductNameById(product.definition.id);
                 _vendorEventListener.PurchasedDelayed(Id, purchaseItem, product.metadata.isoCurrencyCode,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), order.Info.Receipt,
-                    order.Info.TransactionID, EPurchaseOrigin.FreshPurchase);
+                    order.Info.TransactionID, purchaseOrigin);
+            }
+        }
+
+        /// <summary>
+        /// Deferred orders may not own a transaction id yet (e.g. Google Play pending payments),
+        /// so the first product id of the cart is used as a fallback key.
+        /// </summary>
+        private static string GetDeferredOrderKey(DeferredOrder order)
+        {
+            CartItem item = order.CartOrdered.Items()[0];
+            return item.Product.definition.id;
+        }
+
+        /// <summary>
+        /// Mirrors Unity IAP: once a deferred order is approved it arrives as a pending order,
+        /// so every deferred order sharing a transaction id or a product with it is dropped.
+        /// </summary>
+        private void RemoveDeferredOrders(Order pendingOrder)
+        {
+            if (_deferredOrderTable == null || _deferredOrderTable.Count == 0)
+                return;
+
+            string productId = pendingOrder.CartOrdered.Items()[0].Product.definition.id;
+            if (_deferredOrderTable.TryGetValue(productId, out var deferredOrder) && deferredOrder.Info.TransactionID == pendingOrder.Info.TransactionID)
+            {
+                _deferredOrderTable.Remove(productId);
             }
         }
 
         private void OnPurchaseFailed(FailedOrder order)
         {
             _isFetchingPurchases = false;
+            RemoveDeferredOrders(order);
             foreach (CartItem item in order.CartOrdered.Items())
             {
                 Product product = item.Product;
@@ -404,6 +459,20 @@ namespace GameWarriors.VendorDomian.Core
         private void OnPurchasesFetched(Orders orders)
         {
             _isFetchingPurchases = false;
+
+            // The fetched deferred list is authoritative: drop the ones that were declined or
+            // cancelled outside the app and only notify about the ones not reported before.
+            Dictionary<string, DeferredOrder> previousDeferredOrders = _deferredOrderTable;
+            _deferredOrderTable = new(orders.DeferredOrders.Count);
+            foreach (DeferredOrder order in orders.DeferredOrders)
+            {
+                string key = GetDeferredOrderKey(order);
+                if (previousDeferredOrders != null && previousDeferredOrders.ContainsKey(key))
+                    _deferredOrderTable[key] = order;
+                else
+                    ProcessDeferredOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
+            }
+
             foreach (PendingOrder order in orders.PendingOrders)
                 ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
 
@@ -448,6 +517,22 @@ namespace GameWarriors.VendorDomian.Core
             if (item != null && _subscriptionsTable != null &&
                 _subscriptionsTable.TryGetValue(item.Id, out SubscriptionInfo info))
                 return new SubscriptionData(info.GetExpireDate());
+            return null;
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
+            IProductItem item = GetProductByName(itemName);
+            if (item == null || _deferredOrderTable == null)
+                return null;
+
+            foreach (DeferredOrder order in _deferredOrderTable.Values)
+            {
+                CartItem cartItem = order.CartOrdered.Items()[0];
+                string productId = cartItem.Product.definition.id;
+                if (productId == item.Id || (!string.IsNullOrEmpty(item.OffProductId) && productId == item.OffProductId))
+                    return new DelayPurchaseData(item, order.Info.TransactionID);
+            }
             return null;
         }
 

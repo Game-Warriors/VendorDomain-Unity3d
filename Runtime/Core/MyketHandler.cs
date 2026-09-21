@@ -57,6 +57,9 @@ namespace GameWarriors.VendorDomian.Core
                 }
             }
         }
+
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems => Array.Empty<IDelayPurchaseItem>();
+
         public MyketHandler(IVendorResourceLoader resourceLoader)
         {
             resourceLoader.LoadAsync(Id, OnLoadDone);
@@ -288,6 +291,11 @@ namespace GameWarriors.VendorDomian.Core
                 if (_subscriptionsTable.TryGetValue(product.Id, out MyketPurchase info))
                     return new SubscriptionData(DateTimeOffset.FromUnixTimeMilliseconds(info.PurchaseTime).AddDays(product.PurchaseLimit).DateTime);
             }
+            return null;
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
             return null;
         }
 
