@@ -471,7 +471,7 @@ namespace GameWarriors.VendorDomian.Core
             // The fetched deferred list is authoritative: drop the ones that were declined or
             // cancelled outside the app and only notify about the ones not reported before.
             Dictionary<string, DeferredOrder> previousDeferredOrders = _deferredOrderTable;
-            _deferredOrderTable.Clear();
+            _deferredOrderTable?.Clear();
             foreach (DeferredOrder order in orders.DeferredOrders)
             {
                 string key = GetDeferredOrderKey(order);
@@ -481,18 +481,21 @@ namespace GameWarriors.VendorDomian.Core
                     ProcessDeferredOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
             }
 
-            foreach (PendingOrder order in orders.PendingOrders)
+            if (_orderTable != null)
             {
-                if (_orderTable.TryAdd(order.Info.TransactionID, order))
+                foreach (PendingOrder order in orders.PendingOrders)
                 {
-                    CartItem item = order.CartOrdered.Items()[0];
-                    Product product = item.Product;
-                    IProductItem purchaseItem = GetProductNameById(product.definition.id);
-                    _vendorEventListener.OnPendingPurchaseRecovered(Id, purchaseItem, order.Info.TransactionID);
+                    if (_orderTable.TryAdd(order.Info.TransactionID, order))
+                    {
+                        CartItem item = order.CartOrdered.Items()[0];
+                        Product product = item.Product;
+                        IProductItem purchaseItem = GetProductNameById(product.definition.id);
+                        _vendorEventListener.OnPendingPurchaseRecovered(Id, purchaseItem, order.Info.TransactionID);
+                    }
                 }
             }
 
-            _subscriptionsTable.Clear();
+            _subscriptionsTable?.Clear();
             foreach (ConfirmedOrder order in orders.ConfirmedOrders)
             {
                 foreach (var productInfo in order.Info.PurchasedProductInfo)

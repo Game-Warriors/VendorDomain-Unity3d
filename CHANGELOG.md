@@ -1,3 +1,6 @@
+    version : 0.4.1
+    fix null reference bug in UnityIapMarketHandlerBase.OnPurchasesFetched
+
     version : 0.4.0
     add pending item IEnumerable and UnconsumePurchaseCount in IDefaultVendorData
     
