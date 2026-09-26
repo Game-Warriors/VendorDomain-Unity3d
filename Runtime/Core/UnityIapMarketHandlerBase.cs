@@ -319,15 +319,19 @@ namespace GameWarriors.VendorDomian.Core
         {
             _orderTable ??= new();
             _orderTable.TryAdd(order.Info.TransactionID, order);
-            RemoveDeferredOrders(order);
-            foreach (CartItem item in order.CartOrdered.Items())
-            {
-                Product product = item.Product;
-                IProductItem purchaseItem = GetProductNameById(product.definition.id);
-                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem,
-                    product.metadata.isoCurrencyCode, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
-            }
+            bool isDeferred = RemoveDeferredOrders(order);
+            if (isDeferred && purchaseOrigin == EPurchaseOrigin.FreshPurchase)
+                purchaseOrigin = EPurchaseOrigin.DelayPurchase;
+
+            //foreach (CartItem item in order.CartOrdered.Items())
+            CartItem item = order.CartOrdered.Items()[0];
+
+            Product product = item.Product;
+            IProductItem purchaseItem = GetProductNameById(product.definition.id);
+            _vendorEventListener.PurchasedSuccessful(Id, purchaseItem,
+                product.metadata.isoCurrencyCode, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                order.Info.Receipt, order.Info.TransactionID, purchaseOrigin);
+
         }
 
         private void OnPurchaseConfirmed(Order order)
@@ -392,16 +396,17 @@ namespace GameWarriors.VendorDomian.Core
         /// Mirrors Unity IAP: once a deferred order is approved it arrives as a pending order,
         /// so every deferred order sharing a transaction id or a product with it is dropped.
         /// </summary>
-        private void RemoveDeferredOrders(Order pendingOrder)
+        private bool RemoveDeferredOrders(Order pendingOrder)
         {
             if (_deferredOrderTable == null || _deferredOrderTable.Count == 0)
-                return;
+                return false;
 
             string productId = pendingOrder.CartOrdered.Items()[0].Product.definition.id;
             if (_deferredOrderTable.TryGetValue(productId, out var deferredOrder) && deferredOrder.Info.TransactionID == pendingOrder.Info.TransactionID)
             {
-                _deferredOrderTable.Remove(productId);
+                return _deferredOrderTable.Remove(productId);
             }
+            return false;
         }
 
         private void OnPurchaseFailed(FailedOrder order)

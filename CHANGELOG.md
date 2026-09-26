@@ -1,3 +1,9 @@
+    version : 0.3.8
+    fix on purchase success callback
+
+    version : 0.3.7
+    add new EPurchaseOrigin.DelayPurchase for success FreshPurchase to detect purchase has success after delay
+
     version : 0.3.6
     improve deferred initialization
 

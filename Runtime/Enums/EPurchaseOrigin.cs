@@ -4,5 +4,6 @@ namespace GameWarriors.VendorDomian.Enums
     {
         FreshPurchase = 0,
         RecoveredUnconfirmedPurchase = 1,
+        DelayPurchase = 2
     }
 }
