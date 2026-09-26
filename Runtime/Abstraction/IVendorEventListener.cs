@@ -11,6 +11,7 @@ namespace GameWarriors.VendorDomian.Abstraction
             long purchaseTime, string orderId, string transactionId, EPurchaseOrigin purchaseOrigin);
         void PurchasedSuccessful(string marketId, IProductItem purchaseItem, string currencyType,
             long purchaseTime, string orderId, string transactionId, EPurchaseOrigin purchaseOrigin);
+        void StoreInitializeSuccess(string marketId);
         void StoreInitializeFailed(string marketId, string error);
         void UserCancelPurchase(string marketId, IProductItem purchaseItem, int state, string error);
         void OnError(string marketId, int state, string error);
@@ -18,5 +19,6 @@ namespace GameWarriors.VendorDomian.Abstraction
         void ConsumeFailed(string marketId, IProductItem purchaseItem, string token, string transactionId);
         void OnProductItemsUpdate(string marketId);
         void OnSubscriptionsUpdate(string marketId);
+        void OnPendingPurchaseRecovered(string marketId, IProductItem purchaseItem, string transactionId);
     }
 }

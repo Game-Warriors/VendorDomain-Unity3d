@@ -114,7 +114,8 @@ namespace GameWarriors.VendorDomian.Core
                     }
                     else if (product.Type == EProductType.Consumable)
                     {
-                        _orderTable.TryAdd(item.PurchaseToken, item);
+                        if (_orderTable.TryAdd(item.PurchaseToken, item))
+                            _vendorEventListener.OnPendingPurchaseRecovered(Id, product, item.PurchaseToken);
                     }
                 }
             }
@@ -180,6 +181,7 @@ namespace GameWarriors.VendorDomian.Core
         private void billingSupportedEvent()
         {
             SetState(EStoreSetupState.Initialized);
+            _vendorEventListener?.StoreInitializeSuccess(Id);
         }
 
         private void OnLoadDone(IVendorConfigurationObject resource)
@@ -381,6 +383,17 @@ namespace GameWarriors.VendorDomian.Core
         {
             _state = state;
             _vendorEventListener?.OnVendorStateChanged(Id, state);
+        }
+
+        void IMarketHandler.ResolvePendingPurchase(string transactionId)
+        {
+            if (_orderTable.TryGetValue(transactionId, out var order))
+            {
+                IProductItem purchaseItem = GetProductNameById(order.ProductId);
+                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
+                order.PurchaseTime,
+                order.OrderId, order.PurchaseToken, EPurchaseOrigin.FreshPurchase);
+            }
         }
     }
 #endif

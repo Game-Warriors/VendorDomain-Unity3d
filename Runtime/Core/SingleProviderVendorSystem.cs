@@ -1,8 +1,9 @@
+using GameWarriors.VendorDomian.Abstraction;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
-using GameWarriors.VendorDomian.Abstraction;
 using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Core
@@ -138,6 +139,11 @@ namespace GameWarriors.VendorDomian.Core
         public bool ConsumePurchase(string transactionId)
         {
             return _defaultMarket.ConsumePurchase(transactionId);
+        }
+
+        void IVendor.ResolveUnconsumePurchase(string transactionId)
+        {
+            _defaultMarket?.ResolvePendingPurchase(transactionId);
         }
     }
 }

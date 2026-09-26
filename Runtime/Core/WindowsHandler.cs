@@ -59,6 +59,7 @@ namespace GameWarriors.VendorDomian.Core
             {
                 _productsNameTable.Add(product.Name, product);
             }
+            //_vendorEventListener?.StoreInitializeSuccess(Id);
             _state = EStoreSetupState.FetchPurchases;
         }
 
@@ -204,6 +205,11 @@ namespace GameWarriors.VendorDomian.Core
         public bool ConsumePurchase(string transactionId)
         {
             return true;
+        }
+
+        public void ResolvePendingPurchase(string transactionId)
+        {
+
         }
     }
 }

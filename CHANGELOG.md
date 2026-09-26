@@ -1,3 +1,6 @@
+    version : 0.3.9
+    add new StoreInitializeSuccess and OnPendingPurchaseRecovered event, fix recover pending purchase pipeline and add ResolvePendingPurchase method in market.
+
     version : 0.3.8
     fix on purchase success callback
 

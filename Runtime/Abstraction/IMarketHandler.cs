@@ -37,5 +37,6 @@ namespace GameWarriors.VendorDomian.Abstraction
         IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName);
         void SetProdcutSalesOffState(string itemName, bool offState);
         void SetAllProdcutSalesOffState(bool state);
+        void ResolvePendingPurchase(string transactionId);
     }
 }

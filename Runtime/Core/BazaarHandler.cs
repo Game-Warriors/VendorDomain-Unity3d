@@ -97,7 +97,7 @@ namespace GameWarriors.VendorDomian.Core
                     return false;
                 }
                 SetState(EStoreSetupState.Initialized);
-
+                _vendorEventListener?.StoreInitializeSuccess(Id);
                 if (_productsNameTable != null)
                     RefreshProducts();
 
@@ -272,7 +272,8 @@ namespace GameWarriors.VendorDomian.Core
                 {
                     if (item.purchaseState == PurchaseInfo.State.Purchased && product.Type == EProductType.Consumable)
                     {
-                        _orderTable.TryAdd(item.purchaseToken, item);
+                        if (_orderTable.TryAdd(item.purchaseToken, item))
+                            _vendorEventListener.OnPendingPurchaseRecovered(Id, product, item.purchaseToken);
                     }
                     else if (item.purchaseState == PurchaseInfo.State.Purchased || item.purchaseState == PurchaseInfo.State.Consumed
                         && product.Type == EProductType.Subscription)
@@ -370,6 +371,16 @@ namespace GameWarriors.VendorDomian.Core
             return null;
         }
 
+        void IMarketHandler.ResolvePendingPurchase(string transactionId)
+        {
+            if (_orderTable.TryGetValue(transactionId, out var order))
+            {
+                IProductItem purchaseItem = GetProductNameById(order.productId);
+                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
+                order.purchaseTime,
+                order.orderId, order.purchaseToken, EPurchaseOrigin.FreshPurchase);
+            }
+        }
     }
 #endif
 }

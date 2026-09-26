@@ -194,5 +194,10 @@ namespace GameWarriors.VendorDomian.Core
         {
             return _defaultMarket.ConsumePurchase(transactionId);
         }
+
+        void IVendor.ResolveUnconsumePurchase(string transactionId)
+        {
+            _defaultMarket?.ResolvePendingPurchase(transactionId);
+        }
     }
 }

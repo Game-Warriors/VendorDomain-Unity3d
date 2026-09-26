@@ -203,6 +203,7 @@ namespace GameWarriors.VendorDomian.Core
         {
             _subscriptionsTable = new Dictionary<string, SubscriptionInfo>();
             SetState(EStoreSetupState.Initialized);
+            _vendorEventListener?.StoreInitializeSuccess(Id);
             RefreshProducts();
         }
 
@@ -481,7 +482,15 @@ namespace GameWarriors.VendorDomian.Core
             }
 
             foreach (PendingOrder order in orders.PendingOrders)
-                ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
+            {
+                if (_orderTable.TryAdd(order.Info.TransactionID, order))
+                {
+                    CartItem item = order.CartOrdered.Items()[0];
+                    Product product = item.Product;
+                    IProductItem purchaseItem = GetProductNameById(product.definition.id);
+                    _vendorEventListener.OnPendingPurchaseRecovered(Id, purchaseItem, order.Info.TransactionID);
+                }
+            }
 
             _subscriptionsTable.Clear();
             foreach (ConfirmedOrder order in orders.ConfirmedOrders)
@@ -497,10 +506,19 @@ namespace GameWarriors.VendorDomian.Core
             _vendorEventListener.OnSubscriptionsUpdate(Id);
         }
 
+
         private void OnPurchasesFetchFailed(PurchasesFetchFailureDescription failure)
         {
             _isFetchingPurchases = false;
             _vendorEventListener.OnError(Id, (int)failure.FailureReason, failure.Message);
+        }
+
+        public void ResolvePendingPurchase(string transactionId)
+        {
+            if (_orderTable.TryGetValue(transactionId, out var order))
+            {
+                ProcessPendingOrder(order, EPurchaseOrigin.RecoveredUnconfirmedPurchase);
+            }
         }
 
         public IProductItem GetProductByName(string itemName)
