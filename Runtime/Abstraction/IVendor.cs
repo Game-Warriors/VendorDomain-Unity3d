@@ -15,7 +15,7 @@ namespace GameWarriors.VendorDomian.Abstraction
         void OpenVendorLocation();
         void OpenRate(Action<bool> onDone);
         void RefreshProducts();
-        void CheckUnconsumePurchase();
+        void FetchUnconsumePurchase();
         void ResolveUnconsumePurchase(string transactionId);
     }
 }

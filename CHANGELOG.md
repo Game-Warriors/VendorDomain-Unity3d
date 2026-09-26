@@ -1,3 +1,6 @@
+    version : 0.4.0
+    add pending item IEnumerable and UnconsumePurchaseCount in IDefaultVendorData
+    
     version : 0.3.9
     add new StoreInitializeSuccess and OnPendingPurchaseRecovered event, fix recover pending purchase pipeline and add ResolvePendingPurchase method in market.
 

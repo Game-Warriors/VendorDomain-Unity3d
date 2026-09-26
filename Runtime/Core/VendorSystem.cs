@@ -26,7 +26,9 @@ namespace GameWarriors.VendorDomian.Core
 
         public bool IsPurchasesFetched => _defaultMarket.IsPurchasesFetched;
 
+        int? IDefaultVendorData.UnconsumePurchaseCount => _defaultMarket?.UnconsumePurchaseCount;
 
+        IEnumerable<IPendingPurchaseItem> IDefaultVendorData.PendingPurchaseItems => _defaultMarket.PendingPurchaseItems;
 
         [UnityEngine.Scripting.Preserve]
         public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup)
@@ -144,7 +146,7 @@ namespace GameWarriors.VendorDomian.Core
             _defaultMarket.RateUs(onDone);
         }
 
-        void IVendor.CheckUnconsumePurchase()
+        void IVendor.FetchUnconsumePurchase()
         {
             if (Application.internetReachability == NetworkReachability.NotReachable)
                 return;
