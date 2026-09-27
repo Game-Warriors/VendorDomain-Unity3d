@@ -1,3 +1,6 @@
+    version : 0.4.2
+    fix order table instantiating bug
+
     version : 0.4.1
     fix null reference bug in UnityIapMarketHandlerBase.OnPurchasesFetched
 

@@ -129,7 +129,8 @@ namespace GameWarriors.VendorDomian.Core
             _storeController.OnPurchaseDeferred += OnPurchaseDeferred;
             _storeController.OnStoreConnected += OnStoreConnected;
             _storeController.OnStoreDisconnected += OnStoreDisconnected;
-
+            _deferredOrderTable = new();
+            _orderTable = new();
             await TryConnecting();
         }
 
@@ -178,7 +179,6 @@ namespace GameWarriors.VendorDomian.Core
             {
                 _productsNameTable = new();
                 _productsSkuTable = new();
-                _deferredOrderTable = new();
                 _vendorEventListener?.StoreInitializeFailed(Id, $"The resource for market id {Id} is null.");
                 return;
             }
@@ -186,7 +186,6 @@ namespace GameWarriors.VendorDomian.Core
             OnCatalogLoaded(resource);
             _productsNameTable = new(resource.ItemCounts);
             _productsSkuTable = new(resource.ItemCounts);
-            _deferredOrderTable = new();
             foreach (IProductItem product in resource.Products)
             {
                 _productsNameTable.Add(product.Name, product);
@@ -318,7 +317,6 @@ namespace GameWarriors.VendorDomian.Core
 
         private void ProcessPendingOrder(PendingOrder order, EPurchaseOrigin purchaseOrigin)
         {
-            _orderTable ??= new();
             _orderTable.TryAdd(order.Info.TransactionID, order);
             bool isDeferred = RemoveDeferredOrders(order);
             if (isDeferred && purchaseOrigin == EPurchaseOrigin.FreshPurchase)
