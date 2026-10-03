@@ -5,7 +5,7 @@ namespace GameWarriors.VendorDomian.VendorEditor
 {
     public static class XsollaBuildTools
     {
-        public static void SetupMainTemplateForXsolla(bool isXsollaEnable, string xsollaVersion = "3.0.461")
+        public static void SetupMainTemplateForXsolla(bool isXsollaEnable, string xsollaVersion = "3.0.58")
         {
             VendorBuildTools.SetEnabled("Packages/com.xsolla.sdk/Plugins/XsollaSDK/Android/XsollaStoreClientNativeAndroid.java", isXsollaEnable);
             string mainGradle = Path.Combine(Application.dataPath, "Plugins/Android/mainTemplate.gradle");

@@ -9,9 +9,10 @@
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Quick start: one store](#quick-start-one-store)
 - [Store setup](#store-setup)
 - [Product configuration](#product-configuration)
-- [Integration](#integration)
+- [Advanced: multiple markets](#advanced-multiple-markets)
 - [Single market setup](#single-market-setup)
 - [Purchase lifecycle](#purchase-lifecycle)
 - [Using the vendor API](#using-the-vendor-api)
@@ -38,6 +39,9 @@ The package currently includes handlers for:
 
 > The package's existing namespace is `GameWarriors.VendorDomian` (including the `Domian` spelling). Use that spelling in imports.
 > **Note:** The Google, Apple, and Xsolla handlers require Unity IAP 5.4.2 or newer.
+
+If this is your first integration, follow [Quick start: one store](#quick-start-one-store). You do not need an `IMarketGroup` unless the same build must connect to more than one store.
+
 ## Features
 
 - One purchasing API across supported markets
@@ -60,8 +64,8 @@ The package currently includes handlers for:
 
 - Unity 2022.3 or newer
 - Unity Purchasing 5.x; version 5.4.2 is currently tested
-- An `IServiceProvider` containing the services required by the selected handlers
-- Store products configured in App Store Connect or Google Play Console with identifiers matching the Unity configuration
+- An `IServiceProvider`. The examples use `GameWarriors.DependencyInjection.Core.ServiceProvider`; another implementation is valid if it returns registered objects from `GetService(Type)`.
+- Store products configured in the selected store's dashboard with identifiers matching the Unity configuration
 - To use the Bazaar handler, also import the [Poolakey SDK package](https://github.com/Game-Warriors/Poolakey-sdk).
 - To use the Myket handler, also import the [Myket SDK package](https://github.com/Game-Warriors/Myket-sdk).
 - To use the Xsolla handler, also import the [Xsolla SDK package](https://github.com/Game-Warriors/Xsolla-unity3d).
@@ -71,6 +75,8 @@ For Google Play and Apple App Store, install Unity IAP through Package Manager:
 ```text
 com.unity.purchasing
 ```
+
+Every handler needs an `IVendorEventListener`. The default resource-loading examples also register an `IVendorResourceLoader`. Zarinpal and Windows require an `IPaymentServer` implementation for their server-backed flows; register it before calling `Initialization()`.
 
 ## Installation
 
@@ -83,6 +89,296 @@ When installing from a repository that contains several packages, use the packag
 ```text
 https://github.com/your-org/your-repository.git?path=Assets/VendorDomain-Unity3d
 ```
+
+The URL above is a format example. Replace the organization and repository with the real package repository. After installation, let Unity finish importing and resolve all compilation errors from missing store SDKs before continuing.
+
+## Quick start: one store
+
+This path is intended for a first integration. It uses `SingleProviderVendorSystem`, which is the simplest choice when one build sells through one store.
+
+The examples below use Google Play. For Apple or Xsolla, replace `GOOGLE` and `GoogleHandler` with the matching symbol and handler from the [compilation-symbol table](#compilation-symbols).
+
+### Terms used in this guide
+
+| Term | Meaning |
+| --- | --- |
+| Name | The stable application-facing name, such as `starter_pack` |
+| Product ID or SKU | The identifier configured in the store dashboard, such as `com.example.game.starter_pack` |
+| Receipt | Store data used to validate that payment is legitimate |
+| Transaction ID | A unique purchase identifier used to prevent granting the same order twice |
+| Consumable | A product that may be purchased repeatedly, such as coins |
+| Non-consumable | A product normally purchased once, such as removing ads |
+| Deferred purchase | A purchase waiting for payment or approval; it must not be granted yet |
+| Idempotent fulfillment | Processing that produces the same result when the same transaction is delivered more than once |
+
+### 1. Install the dependencies
+
+1. Install this package.
+2. Install Unity Purchasing 5.4.2 or newer from **Window > Package Manager**.
+3. Add the dependency-injection package that supplies `GameWarriors.DependencyInjection.Core.ServiceProvider`, or use your own `IServiceProvider` implementation.
+4. If you selected Bazaar, Myket, or Xsolla, import the additional SDK listed under [Requirements](#requirements).
+
+Do not continue while the Unity Console contains compilation errors.
+
+### 2. Select the store
+
+Under **Project Settings > Player > Other Settings > Scripting Define Symbols**, add `GOOGLE` to the Android symbol list. Symbols are separated by semicolons. Keep store symbols platform-specific so, for example, an iOS build does not compile `GoogleHandler`.
+
+After Unity recompiles, this should be a valid type:
+
+```csharp
+IMarketHandler handler = new GoogleHandler(loader);
+```
+
+If the type cannot be found, check the symbol and Unity Console before proceeding.
+
+### 3. Create a sandbox product
+
+In Google Play Console, create one in-app product for testing. For example:
+
+```text
+Product ID: com.example.game.starter_pack
+Type: Consumable
+```
+
+Activate the product, configure the app's test track and license testers, and use a store-installed test build. Store dashboards can take time to publish product changes.
+
+### 4. Configure the same product in Unity
+
+Open **Tools > Vendor Configuration** and add the product to the Google product array:
+
+```text
+Name: starter_pack
+Product ID: com.example.game.starter_pack
+Type: Consumable
+Is Enable: true
+```
+
+`Name` is the stable name used by game code. `Product ID` must exactly match the identifier in the store dashboard.
+
+Press **Save**. The editor creates all store configuration assets under `Assets/AssetData/Vendor`, including:
+
+```text
+Assets/AssetData/Vendor/GooglePlayVendorConfig.asset
+```
+
+### 5. Put the configuration where the default loader can find it
+
+`VendorDefaultResourceLoader` uses Unity's `Resources.Load`, so the generated asset is **not loadable from its generated location**. Move the selected store's asset into a `Resources` directory without renaming it:
+
+```text
+Assets/Resources/GooglePlayVendorConfig.asset
+```
+
+Only the configuration for the selected store is required for a single-store build. If you do not want to use a `Resources` directory, implement `IVendorResourceLoader` as described under [Custom resource loading](#custom-resource-loading).
+
+### 6. Add the purchase-event listener
+
+Create `GameVendorEvents.cs`. This minimal implementation compiles against the current `IVendorEventListener` interface:
+
+```csharp
+using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Enums;
+using UnityEngine;
+
+public sealed class GameVendorEvents : IVendorEventListener
+{
+    public void PurchasedSuccessful(
+        string marketId,
+        IProductItem purchaseItem,
+        string currencyType,
+        long purchaseTime,
+        string receipt,
+        string transactionId,
+        EPurchaseOrigin purchaseOrigin)
+    {
+        // Production rule: validate and persist the transaction before granting.
+        // Use transactionId as an idempotency key so it can never grant twice.
+        Debug.Log($"Purchase ready: {purchaseItem.Name} ({transactionId})");
+
+        // After validation, persistence, and granting all succeed, call:
+        // vendor.ConsumePurchase(transactionId);
+    }
+
+    public void OnPendingPurchaseRecovered(
+        string marketId, IProductItem purchaseItem, string transactionId)
+    {
+        // First check persistent storage to decide whether this transaction still
+        // needs fulfillment. Then call vendor.ResolveUnconsumePurchase(transactionId)
+        // to route it through PurchasedSuccessful as a recovered transaction.
+        Debug.Log($"Pending purchase recovered: {transactionId}");
+    }
+
+    public void PurchasedDelayed(
+        string marketId,
+        IProductItem purchaseItem,
+        string currencyType,
+        long purchaseTime,
+        string receipt,
+        string transactionId,
+        EPurchaseOrigin purchaseOrigin)
+    {
+        // Payment or approval is pending. Do not grant or confirm this order.
+        Debug.Log($"Purchase delayed: {purchaseItem.Name}");
+    }
+
+    public void StoreInitializeSuccess(string marketId) =>
+        Debug.Log($"Store initialized: {marketId}");
+
+    public void StoreInitializeFailed(string marketId, string error) =>
+        Debug.LogError(error);
+
+    public void PurchasedFailed(string marketId, IProductItem purchaseItem,
+        int state, string error) => Debug.LogError(error);
+
+    public void UserCancelPurchase(string marketId, IProductItem purchaseItem,
+        int state, string error) { }
+
+    public void ConsumeSuccess(string marketId, IProductItem purchaseItem,
+        string receipt, string transactionId) { }
+
+    public void ConsumeFailed(string marketId, IProductItem purchaseItem,
+        string receipt, string transactionId) => Debug.LogError(
+            $"Purchase confirmation failed and can be retried: {transactionId}");
+
+    public void OnError(string marketId, int state, string error) =>
+        Debug.LogError(error);
+
+    public void OnVendorStateChanged(string marketId,
+        EStoreSetupState setupState) { }
+
+    public void OnProductItemsUpdate(string marketId) { }
+    public void OnSubscriptionsUpdate(string marketId) { }
+}
+```
+
+The comments deliberately do not grant an item automatically. A production game must decide how it validates receipts and stores processed transaction IDs. Server-side validation is recommended for valuable purchases. Never grant solely because a button was clicked.
+
+### 7. Initialize the vendor system
+
+Create `SingleVendorStartup.cs`, attach it to a GameObject in the first scene, and keep that GameObject alive for as long as purchases may occur:
+
+```csharp
+using System;
+using GameWarriors.DependencyInjection.Core;
+using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Core;
+using UnityEngine;
+
+public sealed class SingleVendorStartup : MonoBehaviour
+{
+    public IVendor Vendor { get; private set; }
+    public IDefaultVendorData VendorData { get; private set; }
+
+    public bool CanPurchase => Vendor != null
+        && Vendor.IsInitialized
+        && Vendor.IsProductFetched
+        && Vendor.IsPurchasesFetched;
+
+    private async void Awake()
+    {
+        try
+        {
+            var provider = new ServiceProvider();
+            var loader = new VendorDefaultResourceLoader();
+            var listener = new GameVendorEvents();
+
+            provider.SetSingletonService(typeof(IVendorResourceLoader), loader);
+            provider.SetSingletonService(typeof(IVendorEventListener), listener);
+
+            IMarketHandler handler = CreateMarketHandler(loader);
+            var system = new SingleProviderVendorSystem(provider, handler);
+
+            await system.WaitForLoading();
+            system.Initialization();
+
+            Vendor = system;
+            VendorData = system;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
+    private static IMarketHandler CreateMarketHandler(
+        IVendorResourceLoader loader)
+    {
+#if GOOGLE
+        return new GoogleHandler(loader);
+#elif APPLE
+        return new AppleHandler(loader);
+#elif XSOLLA
+        return new XsollaHandler(loader);
+#else
+        throw new PlatformNotSupportedException(
+            "Add the scripting symbol for the store used by this build.");
+#endif
+    }
+}
+```
+
+For Zarinpal or Windows, also register the handler's required `IPaymentServer` implementation before `Initialization()`.
+
+### 8. Connect a purchase button
+
+Keep the button disabled until `CanPurchase` is true. When clicked, pass the configured **Name**, not the store Product ID:
+
+```csharp
+using UnityEngine;
+using UnityEngine.UI;
+
+public sealed class BuyStarterPackButton : MonoBehaviour
+{
+    [SerializeField] private SingleVendorStartup vendorStartup;
+    [SerializeField] private Button button;
+
+    private void Update()
+    {
+        if (button != null)
+        {
+            button.interactable = vendorStartup != null
+                && vendorStartup.CanPurchase;
+        }
+    }
+
+    public void BuyStarterPack()
+    {
+        if (vendorStartup == null || !vendorStartup.CanPurchase)
+            return;
+
+        vendorStartup.Vendor.PurchaseProduct("starter_pack", hasOff: false);
+    }
+}
+```
+
+Attach this component to a GameObject, assign both Inspector fields, and connect the UI Button's **On Click** event to `BuyStarterPackButton.BuyStarterPack`.
+
+The normal successful sequence is:
+
+```text
+PurchasedSuccessful
+    -> validate the receipt
+    -> check and persist transactionId
+    -> grant the product
+    -> ConsumePurchase(transactionId)
+    -> ConsumeSuccess
+```
+
+### 9. Test the integration
+
+Use a development build installed through the store's testing track and sign in with a sandbox/test account. Verify all of the following before shipping:
+
+- The store initializes without errors.
+- `CanPurchase` becomes `true` and localized product metadata appears.
+- Cancelling reaches `UserCancelPurchase` without granting anything.
+- A successful transaction grants exactly once and reaches `ConsumeSuccess`.
+- Recovery after restarting with an unfinished transaction is explicitly tested; see the current limitation under [Purchase lifecycle](#purchase-lifecycle) if the callback does not arrive.
+- A delayed purchase does not grant until it later becomes successful.
+
+If a step fails, use [Troubleshooting](#troubleshooting) and include the `marketId`, state, and error in your logs.
+
+At this point the basic single-store integration is complete. The remaining sections are reference material and advanced setup.
 
 ## Store setup
 
@@ -97,14 +393,16 @@ Add the relevant custom symbol under **Project Settings > Player > Other Setting
 | Cafe Bazaar | `BAZAAR` | `BazaarHandler` |
 | Myket | `MYKET` | `MyketHandler` |
 | Xsolla | `XSOLLA` | `XsollaHandler` |
+| Zarinpal on Android | `GOOGLE` and `ZARINPAL` | `ZarinpalAndroidHandler` |
+| Zarinpal on iOS | `ZARINPAL` with the iOS build target | `ZarinpalIosHandler` |
 
-Use platform-specific symbol lists so Android and iOS builds do not include the wrong store handler. The Google and Apple classes are not compiled unless their corresponding symbols are defined.
+Use platform-specific symbol lists so Android and iOS builds do not include the wrong store handler. These handler classes are conditionally compiled and cannot be referenced until their symbols are defined.
 
 ### Store dashboards
 
 Before testing a purchase:
 
-1. Create each in-app product in Google Play Console or App Store Connect.
+1. Create each in-app product in the selected store's dashboard.
 2. Use exactly the same product identifier in the Vendor Configuration window.
 3. Set the correct product type: `Consumable`, `NonConsumable`, or `Subscription`.
 4. Complete the store's banking, tax, agreement, and sandbox-tester setup.
@@ -112,7 +410,7 @@ Before testing a purchase:
 
 ## Product configuration
 
-Open **Tools > Vendor Configuration** in the Unity Editor. The window contains separate product arrays and market URL fields for Bazaar, Google, Apple, and Zarinpal.
+Open **Tools > Vendor Configuration** in the Unity Editor. The window contains separate product arrays and market URL fields for Bazaar, Myket, Google, Apple, Zarinpal, and Xsolla. Bazaar and Myket also expose their store keys; Xsolla exposes its setup configuration.
 
 Each `VendorPurchaseItem` contains:
 
@@ -124,8 +422,8 @@ Each `VendorPurchaseItem` contains:
 | Price | Runtime price populated from store metadata |
 | Items Data | Currencies or rewards granted by the product |
 | Type | Consumable, non-consumable, or subscription |
-| Purchase Limit | Optional application-level purchase restriction |
-| Is Enable | Application-level product availability |
+| Purchase Limit | Value exposed for an application-level purchase restriction; the package does not enforce it |
+| Is Enable | Availability flag exposed to application code; the package does not block purchases automatically |
 
 Press **Save** to update or create the configuration assets under:
 
@@ -139,21 +437,27 @@ The expected asset names are based on `MarketId`:
 GooglePlayVendorConfig.asset
 AppleVendorConfig.asset
 BazaarVendorConfig.asset
+MyketVendorConfig.asset
 ZarinpalVendorConfig.asset
+XsollaVendorConfig.asset
 ```
 
 ### Important: default loader location
 
-`VendorDefaultResourceLoader` uses `Resources.Load`. If you use this loader, place the generated assets under any Unity `Resources` directory while preserving their filenames. For example:
+`VendorDefaultResourceLoader` uses `Resources.Load`. The configuration window initially saves assets outside a `Resources` directory, so the default loader cannot find them there. If you use this loader, move each configuration needed by the build under any Unity `Resources` directory while preserving its filename. For example:
 
 ```text
 Assets/Resources/GooglePlayVendorConfig.asset
 Assets/Resources/AppleVendorConfig.asset
 ```
 
+If the asset remains only under `Assets/AssetData/Vendor`, the handler loads no configured products and purchases cannot work. A single-store build needs only its selected store's asset; a multi-market build needs one loadable asset for every registered handler.
+
 If your project uses Addressables, Asset Bundles, or another content system, keep the assets in its required location and provide a custom `IVendorResourceLoader`.
 
-## Integration
+## Advanced: multiple markets
+
+Start with the [single-store quick start](#quick-start-one-store) unless one build must connect to several stores or change its active store at runtime. Multiple markets increase startup work because every registered handler loads a configuration and connects to its store.
 
 Integration requires:
 
@@ -170,7 +474,7 @@ Two vendor systems are available, and they differ only in how step 3 is provided
 | `SingleProviderVendorSystem` | one `IMarketHandler` | the build targets a single store |
 | `VendorSystem` | an `IMarketGroup` | the build has to hold more than one store, or switch the active one at runtime |
 
-`IMarketGroup` is optional. If a build ships with a single store, skip it and pass the handler directly; see [Single market setup](#single-market-setup). The rest of this section describes the market group route.
+`IMarketGroup` is optional. If a build ships with a single store, skip it and pass the handler directly; see [Single market setup](#single-market-setup). The rest of this section describes only the advanced market-group route.
 
 ### Create a market group (optional)
 
@@ -282,81 +586,11 @@ Because every market is initialized, a group with several stores connects to all
 
 ### Implement purchase events
 
-`PurchasedSuccessful` means that the store has paid the order and it is ready to be granted or validated. Use `transactionId` as an idempotency key so the same transaction can never grant rewards twice.
+Use the complete `GameVendorEvents` implementation from [Quick start](#6-add-the-purchase-event-listener). The same listener works for a market group because every callback includes `marketId`.
 
-```csharp
-using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Enums;
-using UnityEngine;
+`PurchasedSuccessful` means the order is ready for validation and fulfillment. Use `transactionId` as an idempotency key so the same transaction can never grant rewards twice. `OnPendingPurchaseRecovered` is an earlier notification: after checking persistent state, call `IVendor.ResolveUnconsumePurchase(transactionId)` to send that pending order through `PurchasedSuccessful` with `EPurchaseOrigin.RecoveredUnconfirmedPurchase`.
 
-public sealed class GameVendorEvents : IVendorEventListener
-{
-    public void PurchasedSuccessful(
-        string marketId,
-        IProductItem purchaseItem,
-        string currencyType,
-        long purchaseTime,
-        string receipt,
-        string transactionId,
-        EPurchaseOrigin purchaseOrigin)
-    {
-        switch (purchaseOrigin)
-        {
-            case EPurchaseOrigin.FreshPurchase:
-                // A transaction completed during the active purchase flow.
-                break;
-
-            case EPurchaseOrigin.RecoveredUnconfirmedPurchase:
-                // An unfinished transaction was recovered by FetchPurchases.
-                // Check transactionId before granting it again.
-                break;
-        }
-
-        // Validate/persist the receipt, then grant purchaseItem.CurrenciesData.
-        // After fulfillment succeeds, call IVendor.ConsumePurchase(transactionId).
-    }
-
-    public void PurchasedDelayed(
-        string marketId,
-        IProductItem purchaseItem,
-        string currencyType,
-        long purchaseTime,
-        string receipt,
-        string transactionId,
-        EPurchaseOrigin purchaseOrigin)
-    {
-        // Payment or approval is still pending. Do not grant or confirm it.
-        // Deferred orders can have an empty receipt and transactionId.
-    }
-
-    public void ConsumeSuccess(string marketId, IProductItem item,
-        string receipt, string transactionId) { }
-
-    public void ConsumeFailed(string marketId, IProductItem item,
-        string receipt, string transactionId)
-    {
-        // Confirmation failed. The pending order remains available for retry.
-    }
-
-    public void PurchasedFailed(string marketId, IProductItem item,
-        int state, string error) => Debug.LogError(error);
-
-    public void UserCancelPurchase(string marketId, IProductItem item,
-        string error) { }
-
-    public void StoreInitializeFailed(string marketId, string error) =>
-        Debug.LogError(error);
-
-    public void OnError(string marketId, int state, string error) =>
-        Debug.LogError(error);
-
-    public void OnVendorStateChanged(string marketId,
-        EStoreSetupState setupState) { }
-
-    public void OnProductItemsUpdate(string marketId) { }
-    public void OnSubscriptionsUpdate(string marketId) { }
-}
-```
+Keep transaction processing independent of the active UI. A callback can arrive after startup, after recovery, or after switching the active market.
 
 ### Build the vendor system with a market group
 
@@ -524,15 +758,22 @@ FetchPurchases with a deferred order
     -> DelayPurchaseItems is rebuilt from the store result
     -> PurchasedDelayed(RecoveredUnconfirmedPurchase) only for newly seen orders
 
-FetchPurchases with an unfinished order
+FetchUnconsumePurchase with an unfinished order
+    -> OnPendingPurchaseRecovered(transactionId)
+    -> Check persistent fulfillment state
+    -> ResolveUnconsumePurchase(transactionId)
     -> PurchasedSuccessful(RecoveredUnconfirmedPurchase)
-    -> Validate/persist idempotently
+    -> Validate, persist, and grant idempotently
     -> ConsumePurchase(transactionId)
 ```
 
-The handlers disable Unity IAP's automatic rerouting of fetched pending orders. This lets them reliably distinguish a new purchase from an unfinished transaction returned by `FetchPurchases()`.
+The handlers disable Unity IAP's automatic rerouting of fetched pending orders. This lets application code inspect an unfinished transaction before explicitly routing it through the successful-purchase callback.
 
-`RecoveredUnconfirmedPurchase` does not mean a restored entitlement. Restored non-consumables and subscriptions normally appear as confirmed orders. It means that the store returned an order that had not previously been confirmed.
+`OnPendingPurchaseRecovered` does not grant a product. It reports a stored pending transaction so the game can consult durable fulfillment records. Call `ResolveUnconsumePurchase(transactionId)` only when the transaction should enter the fulfillment flow.
+
+> **Current limitation:** Google and Apple only enumerate fetched pending orders after their in-memory pending-order table has been created. Test recovery after a cold app start in your target Unity IAP version before relying on this flow.
+
+`RecoveredUnconfirmedPurchase` does not mean a restored entitlement. Restored non-consumables and subscriptions normally appear as confirmed orders. It means that the application explicitly resolved an order that the store returned as not yet confirmed.
 
 `ConsumePurchase` returns `true` when confirmation starts. It returns `false` when the transaction is unknown, the handler has no store controller, or confirmation for the same transaction is already in progress. A confirmation failure leaves the order pending so it can be retried safely.
 
@@ -569,10 +810,16 @@ vendor.PurchaseProduct("starter_pack", hasOff: true);
 ### Recover unfinished purchases
 
 ```csharp
-vendor.CheckUnconsumePurchase();
+vendor.FetchUnconsumePurchase();
 ```
 
-Recovered pending transactions are reported through `PurchasedSuccessful` with `EPurchaseOrigin.RecoveredUnconfirmedPurchase`.
+Each newly discovered pending transaction is first reported through `OnPendingPurchaseRecovered`. After checking durable fulfillment records, resolve a transaction that still needs processing:
+
+```csharp
+vendor.ResolveUnconsumePurchase(transactionId);
+```
+
+That call reports the order through `PurchasedSuccessful`. Google, Apple, and Xsolla mark the callback as `EPurchaseOrigin.RecoveredUnconfirmedPurchase`; Bazaar and Myket currently report `FreshPurchase`. Keep the transaction-ID idempotency check in `PurchasedSuccessful` regardless of the origin value.
 
 ### List deferred purchases
 
@@ -596,9 +843,9 @@ The lookup matches both the normal and the sale SKU of the product.
 
 - A purchase is added to the list when `PurchasedDelayed` is reported.
 - It is removed when the store approves it and it arrives as a pending order through `PurchasedSuccessful`.
-- `CheckUnconsumePurchase()` rebuilds the list from the store. Deferred purchases that were declined or cancelled outside the app are removed. `PurchasedDelayed` is reported with `EPurchaseOrigin.RecoveredUnconfirmedPurchase` only for deferred purchases not seen before.
+- `FetchUnconsumePurchase()` rebuilds the list from the store. Deferred purchases that were declined or cancelled outside the app are removed. `PurchasedDelayed` is reported with `EPurchaseOrigin.RecoveredUnconfirmedPurchase` only for deferred purchases not seen before.
 - `TransactionId` can be empty while the store has not assigned one yet.
-- Google, Apple, and Xsolla support deferred purchases. Bazaar, Myket, Windows, and Zarinpal always return an empty list, and `GetDelayPurchaseItem` returns `null`.
+- Google and Apple support deferred purchases. Bazaar, Myket, Xsolla, Windows, and Zarinpal currently return an empty list, and `GetDelayPurchaseItem` returns `null`.
 
 Do not grant content or call `ConsumePurchase` for these items.
 
@@ -660,7 +907,7 @@ Configuration IDs must match the handler's `Id`, such as `GooglePlay` or `Apple`
 
 ### Handler type cannot be found
 
-Add the required `GOOGLE`, `APPLE`, or `BAZAAR` scripting symbol and allow Unity to recompile.
+Add the required scripting symbol from the [compilation-symbol table](#compilation-symbols), select the matching build target, and allow Unity to recompile. Also confirm that the handler's external SDK is installed.
 
 ### Configuration is null
 
@@ -691,7 +938,7 @@ Wait for initialization, products, and purchases to finish, or handle the corres
 
 ### Apple restore behavior
 
-Call the handler's `RefreshPurchases` flow from an explicit **Restore Purchases** button where required by the App Store. The restore operation fetches purchases and updates subscriptions after completion.
+Connect an explicit **Restore Purchases** button to `vendor.FetchUnconsumePurchase()` where required by the App Store. `AppleHandler` starts Apple's restore flow and then fetches purchases. Recovered pending transactions arrive through `OnPendingPurchaseRecovered`; subscription data is refreshed before `OnSubscriptionsUpdate` is invoked.
 
 ## Editor build tools
 
@@ -793,13 +1040,13 @@ Keep the public key out of source control where the project requires it: pass it
 ```csharp
 public static void SetupMainTemplateForXsolla(
     bool isXsollaEnable,
-    string xsollaVersion = "3.0.461")
+    string xsollaVersion = "3.0.46")
 ```
 
 Toggles `Packages/com.xsolla.sdk/Plugins/XsollaSDK/Android/XsollaStoreClientNativeAndroid.java` for Android, then removes every `com.xsolla.android:mobile` dependency line from `mainTemplate.gradle` and re-adds `implementation 'com.xsolla.android:mobile:<xsollaVersion>'` when the store is enabled. Because removal matches the coordinate without its version, changing SDK versions does not leave a stale line behind.
 
 ```csharp
-XsollaBuildTools.SetupMainTemplateForXsolla(isXsollaEnable: true, "3.0.461");
+XsollaBuildTools.SetupMainTemplateForXsolla(isXsollaEnable: true, "3.0.46");
 ```
 
 ### Selecting a store for a build

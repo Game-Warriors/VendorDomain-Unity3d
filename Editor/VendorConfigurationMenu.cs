@@ -69,12 +69,12 @@ namespace GameWarriors.VendorDomian.VendorEditor
         private void Initialization()
         {
             Directory.CreateDirectory(ASSET_DIRECTORY);
-            VendorConfigurationObject googleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(GOOGLE_ASSET_PATH);
-            VendorConfigurationObject bazaarAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(BAZAAR_ASSET_PATH);
-            VendorConfigurationObject myketAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(MYKET_ASSET_PATH);
-            VendorConfigurationObject appleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(APPLE_ASSET_PATH);
-            VendorConfigurationObject zarinpalAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(ZARINPAL_ASSET_PATH);
-            VendorConfigurationObject xsollaAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(XSOLLA_ASSET_PATH);
+            VendorConfigurationObject googleAsset = FindConfigurationAsset(MarketId.GOOGLE);
+            VendorConfigurationObject bazaarAsset = FindConfigurationAsset(MarketId.BAZAAR);
+            VendorConfigurationObject myketAsset = FindConfigurationAsset(MarketId.MYKET);
+            VendorConfigurationObject appleAsset = FindConfigurationAsset(MarketId.APPLE);
+            VendorConfigurationObject zarinpalAsset = FindConfigurationAsset(MarketId.ZARINPAL);
+            VendorConfigurationObject xsollaAsset = FindConfigurationAsset(MarketId.XSOLLA);
             if (googleAsset != null)
             {
                 _googleItems = googleAsset.Products;
@@ -85,12 +85,14 @@ namespace GameWarriors.VendorDomian.VendorEditor
             {
                 _bazaarItems = bazaarAsset.Products;
                 _bazaarMarketPackUrl = bazaarAsset.StoreUrl;
+                _bazaarStoreKey = bazaarAsset.StoreKey;
             }
 
             if (myketAsset != null)
             {
                 _myketItems = myketAsset.Products;
                 _myketMarketPackUrl = myketAsset.StoreUrl;
+                _myketStoreKey = myketAsset.StoreKey;
             }
 
             if (appleAsset != null)
@@ -118,12 +120,12 @@ namespace GameWarriors.VendorDomian.VendorEditor
 
         private void OnWizardCreate()
         {
-            VendorConfigurationObject googleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(GOOGLE_ASSET_PATH);
-            VendorConfigurationObject bazaarAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(BAZAAR_ASSET_PATH);
-            VendorConfigurationObject myketAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(MYKET_ASSET_PATH);
-            VendorConfigurationObject appleAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(APPLE_ASSET_PATH);
-            VendorConfigurationObject zarinpalAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(ZARINPAL_ASSET_PATH);
-            VendorConfigurationObject xsollaAsset = AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(XSOLLA_ASSET_PATH);
+            VendorConfigurationObject googleAsset = FindConfigurationAsset(MarketId.GOOGLE);
+            VendorConfigurationObject bazaarAsset = FindConfigurationAsset(MarketId.BAZAAR);
+            VendorConfigurationObject myketAsset = FindConfigurationAsset(MarketId.MYKET);
+            VendorConfigurationObject appleAsset = FindConfigurationAsset(MarketId.APPLE);
+            VendorConfigurationObject zarinpalAsset = FindConfigurationAsset(MarketId.ZARINPAL);
+            VendorConfigurationObject xsollaAsset = FindConfigurationAsset(MarketId.XSOLLA);
 
             if (googleAsset != null)
             {
@@ -143,6 +145,7 @@ namespace GameWarriors.VendorDomian.VendorEditor
             {
                 bazaarAsset.SetProducts(_bazaarItems);
                 bazaarAsset.SetMarketPackUrl(_bazaarMarketPackUrl);
+                SetStoreKey(bazaarAsset, _bazaarStoreKey);
                 EditorUtility.SetDirty(bazaarAsset);
             }
             else
@@ -150,6 +153,7 @@ namespace GameWarriors.VendorDomian.VendorEditor
                 bazaarAsset = CreateInstance<VendorConfigurationObject>();
                 bazaarAsset.SetProducts(_bazaarItems);
                 bazaarAsset.SetMarketPackUrl(_bazaarMarketPackUrl);
+                SetStoreKey(bazaarAsset, _bazaarStoreKey);
                 AssetDatabase.CreateAsset(bazaarAsset, BAZAAR_ASSET_PATH);
             }
 
@@ -157,6 +161,7 @@ namespace GameWarriors.VendorDomian.VendorEditor
             {
                 myketAsset.SetProducts(_myketItems);
                 myketAsset.SetMarketPackUrl(_myketMarketPackUrl);
+                SetStoreKey(myketAsset, _myketStoreKey);
                 EditorUtility.SetDirty(myketAsset);
             }
             else
@@ -164,6 +169,7 @@ namespace GameWarriors.VendorDomian.VendorEditor
                 myketAsset = CreateInstance<VendorConfigurationObject>();
                 myketAsset.SetProducts(_myketItems);
                 myketAsset.SetMarketPackUrl(_myketMarketPackUrl);
+                SetStoreKey(myketAsset, _myketStoreKey);
                 AssetDatabase.CreateAsset(myketAsset, MYKET_ASSET_PATH);
             }
 
@@ -211,6 +217,34 @@ namespace GameWarriors.VendorDomian.VendorEditor
                 AssetDatabase.CreateAsset(xsollaAsset, XSOLLA_ASSET_PATH);
             }
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// Finds a market's configuration asset wherever it was moved, so the window keeps editing
+        /// the same asset after it is moved into a Resources folder. A copy under a Resources folder
+        /// is preferred because that is the one VendorDefaultResourceLoader loads.
+        /// </summary>
+        private static VendorConfigurationObject FindConfigurationAsset(string marketId)
+        {
+            string fileName = $"{marketId}VendorConfig";
+            string foundPath = null;
+            foreach (string guid in AssetDatabase.FindAssets($"{fileName} t:{nameof(VendorConfigurationObject)}"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (Path.GetFileNameWithoutExtension(path) != fileName)
+                    continue;
+                if (path.Contains("/Resources/"))
+                    return AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(path);
+                foundPath ??= path;
+            }
+            return foundPath != null ? AssetDatabase.LoadAssetAtPath<VendorConfigurationObject>(foundPath) : null;
+        }
+
+        private static void SetStoreKey(VendorConfigurationObject asset, string storeKey)
+        {
+            SerializedObject serializedAsset = new SerializedObject(asset);
+            serializedAsset.FindProperty("_setupConfig._storeKey").stringValue = storeKey;
+            serializedAsset.ApplyModifiedPropertiesWithoutUndo();
         }
     }
 }
