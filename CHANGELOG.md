@@ -1,3 +1,6 @@
+    version : 0.4.3
+    improve try buy product success rate by waiting to fetch products
+    
     version : 0.4.2
     fix order table instantiating bug
 

@@ -10,6 +10,7 @@ namespace GameWarriors.VendorDomian.Core
 {
     using System.Collections.Generic;
     using System.Threading.Tasks;
+    using UnityEngine;
     using UnityEngine.Purchasing;
 
     /// <summary>
@@ -279,6 +280,7 @@ namespace GameWarriors.VendorDomian.Core
                 bool isSuccess = await TryConnecting();
                 if (!isSuccess)
                 {
+                    _vendorEventListener.PurchasedFailed(Id, purchaseItem, 0, "store not connected in retry");
                     return;
                 }
             }
@@ -286,8 +288,18 @@ namespace GameWarriors.VendorDomian.Core
             Product product = _storeController.GetProductById(sku);
             if (product == null)
             {
-                _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)PurchaseFailureReason.NotSupported, "product not found");
-                return;
+                RefreshProducts();
+                DateTime start = DateTime.UtcNow;
+                while (_isFetchingProducts && (DateTime.UtcNow - start).TotalSeconds < 25)
+                {
+                    await Task.Delay(200);
+                }
+                product = _storeController.GetProductById(sku);
+                if (product == null)
+                {
+                    _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)PurchaseFailureReason.NotSupported, "product not found");
+                    return;
+                }
             }
 
             if (!product.availableToPurchase)
@@ -459,6 +471,7 @@ namespace GameWarriors.VendorDomian.Core
         private void OnProductsFetchFailed(ProductFetchFailed failure)
         {
             _isFetchingProducts = false;
+            SetState(EStoreSetupState.Initialized);
             _vendorEventListener?.OnError(Id, 0, failure.ToString());
         }
 
