@@ -876,6 +876,14 @@ if (subscription != null)
 
 Refresh subscription UI when `OnSubscriptionsUpdate` is invoked.
 
+### Xsolla subscription plans
+
+The Xsolla SDK's normal product query returns Virtual Items only. For a Xsolla plan, create a `VendorPurchaseItem` with `Type = Subscription` and set **Product ID** to the plan's **External ID** from Publisher Account > Items catalog > Subscriptions > Subscription plans. The Xsolla handler loads its price and description from the separate Subscriptions API and opens Xsolla's checkout link when `PurchaseProduct` is called.
+
+The player must be authenticated with Xsolla Login so the SDK can provide a user JWT. This handler uses the SDK's Device ID login; enable Device ID authentication for your Login project. After the checkout browser returns, the handler refreshes subscription status. It reports `PurchasedSuccessful` only when Xsolla returns a new active subscription, and `GetSubscriptionInfo` returns the next charge date as the current entitlement boundary. Refresh purchases again if payment confirmation takes longer than the automatic retry window. Subscription purchases are not consumable and do not use `ConsumePurchase`.
+
+Xsolla's client subscription checkout endpoint does not offer a documented sandbox switch. When `IsTestMode` is enabled, the handler rejects the purchase instead of opening a real payment page. To test a purchase, generate a sandbox Pay Station token on your server with `settings.mode = "sandbox"` and open its sandbox checkout URL. Plans with a first-payment setup fee remain visible in the product list but their purchase call reports that a server-generated checkout link is required. See [Xsolla's subscription catalog and checkout guide](https://developers.xsolla.com/sell-subscriptions/integration-guide/create-catalog/) and [sandbox testing guide](https://developers.xsolla.com/sell-subscriptions/integration-guide/get-subscription-information/).
+
 ## Custom resource loading
 
 Handlers depend on `IVendorConfigurationObject`, not directly on Unity's concrete `VendorConfigurationObject`. A custom loader can therefore obtain configuration through another asset system while keeping handlers unchanged.
