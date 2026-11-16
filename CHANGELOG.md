@@ -1,3 +1,6 @@
+    version : 0.4.5
+    fix and polish xsolla subscription
+
     version : 0.4.4
     fetch Xsolla subscription plans through the Subscriptions API, open their live checkout link, and refresh subscription entitlements after checkout. Xsolla subscription Product ID must match the plan External ID. Test mode and first-payment setup fees require a server-generated checkout link.
 

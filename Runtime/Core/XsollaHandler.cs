@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Core
 {
-#if XSOLLA || true
+#if XSOLLA
     using Xsolla.SDK.Common;
     using Xsolla.SDK.UnityPurchasing;
     using UnityEngine.Purchasing;
@@ -348,8 +348,7 @@ namespace GameWarriors.VendorDomian.Core
                 try
                 {
                     var checkoutUrl = await _subscriptionsClient.GetCheckoutUrl(purchaseItem.Id);
-                    if (_store == null)
-                        return;
+ ;
                     _pendingSubscriptionPlanId = purchaseItem.Id;
                     Application.OpenURL(checkoutUrl);
                 }

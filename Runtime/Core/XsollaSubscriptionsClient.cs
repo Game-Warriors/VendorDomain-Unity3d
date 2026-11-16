@@ -7,26 +7,26 @@ using UnityEngine.Networking;
 
 namespace GameWarriors.VendorDomian.Core
 {
-#if XSOLLA || true
+#if XSOLLA
     /// <summary>
     /// Xsolla subscription plans are separate from the SDK's Virtual Items catalog.
     /// These endpoints require the player's Xsolla Login JWT, not a publisher API key.
     /// </summary>
-    internal sealed class XsollaSubscriptionsClient
+    public sealed class XsollaSubscriptionsClient
     {
         private const string BaseUrl = "https://subscriptions.xsolla.com/api/user/v1/projects/";
         private readonly string _projectUrl;
         private readonly Func<Task<string>> _getAccessToken;
         private readonly bool _sandbox;
 
-        internal XsollaSubscriptionsClient(int projectId, Func<Task<string>> getAccessToken, bool sandbox)
+        public XsollaSubscriptionsClient(int projectId, Func<Task<string>> getAccessToken, bool sandbox)
         {
             _projectUrl = BaseUrl + projectId;
             _getAccessToken = getAccessToken;
             _sandbox = sandbox;
         }
 
-        internal async Task<List<Plan>> GetPlans()
+        public async Task<List<Plan>> GetPlans()
         {
             var result = new List<Plan>();
             for (var offset = 0; offset < 5000; offset += 50)
@@ -41,7 +41,7 @@ namespace GameWarriors.VendorDomian.Core
             throw new InvalidOperationException("Xsolla returned too many subscription plan pages.");
         }
 
-        internal async Task<List<Subscription>> GetSubscriptions()
+        public async Task<List<Subscription>> GetSubscriptions()
         {
             var result = new List<Subscription>();
             for (var offset = 0; offset < 5000; offset += 50)
@@ -56,7 +56,7 @@ namespace GameWarriors.VendorDomian.Core
             throw new InvalidOperationException("Xsolla returned too many subscription pages.");
         }
 
-        internal async Task<string> GetCheckoutUrl(string planExternalId)
+        public async Task<string> GetCheckoutUrl(string planExternalId)
         {
             if (string.IsNullOrWhiteSpace(planExternalId))
                 throw new ArgumentException("A subscription plan external ID is required.", nameof(planExternalId));
@@ -106,7 +106,7 @@ namespace GameWarriors.VendorDomian.Core
         }
 
         [Serializable]
-        internal sealed class Plan
+        public sealed class Plan
         {
             public string plan_external_id = string.Empty;
             public string plan_name = string.Empty;
@@ -115,7 +115,7 @@ namespace GameWarriors.VendorDomian.Core
         }
 
         [Serializable]
-        internal sealed class Charge
+        public sealed class Charge
         {
             public float amount = 0f;
             public float setup_fee = 0f;
@@ -123,7 +123,7 @@ namespace GameWarriors.VendorDomian.Core
         }
 
         [Serializable]
-        internal sealed class Subscription
+        public sealed class Subscription
         {
             public long id = 0;
             public string plan_external_id = string.Empty;
