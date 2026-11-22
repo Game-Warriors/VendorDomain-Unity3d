@@ -1,9 +1,10 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Enums;
+using System;
 using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Data
 {
-    public enum ProductType { Consumable, NonConsumable };
+
 
     [Serializable]
     public class Product
@@ -11,13 +12,13 @@ namespace GameWarriors.VendorDomian.Data
         [SerializeField]
         private string _productId;
         [SerializeField]
-        private ProductType _type;
+        private EProductType _type;
         [SerializeField]
         private float _price;
 
         public float Price => _price;
         public string ProductId => _productId;
-        public ProductType Type => _type;
+        public EProductType Type => _type;
 
         public void SetProductId(string newId)
         {

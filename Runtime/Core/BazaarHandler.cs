@@ -1,54 +1,156 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Abstraction;
+using GameWarriors.VendorDomian.Constants;
+using GameWarriors.VendorDomian.Data;
+using GameWarriors.VendorDomian.Enums;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
-using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
 
 
 namespace GameWarriors.VendorDomian.Core
 {
+
 #if BAZAAR
-using BazaarPlugin;
+    using Bazaar.Data;
+    using Bazaar.Poolakey;
+    using Bazaar.Poolakey.Data;
+    using GameWarriors.VendorDomian.Data.Bazaar;
+    using System.Threading.Tasks;
+
     public class BazaarHandler : IMarketHandler
     {
+        private string _key;
+        private bool _isFetchingProducts;
+        private bool _isFetchingPurchases;
+        private EStoreSetupState _state;
+        private Payment _storeController;
+        private IVendorEventListener _vendorEventListener;
+        private Dictionary<string, IProductItem> _productsNameTable;
+        private Dictionary<string, IProductItem> _productsSkuTable;
+        private Dictionary<string, SKUDetails> _subscriptionsTable;
+        private Dictionary<string, PurchaseInfo> _orderTable;
+        public string Id => MarketId.BAZAAR;
 
-        private Dictionary<string, VendorPurchaseItem> _productsTable;
-        private IVendorEventHandler _vendorEventHandler;
-        public string MarketId => "Bazaar";
+        public string VendorLink => $"https://cafebazaar.ir/app/{Application.identifier}";
 
-        public string VendorLink => $"https://cafebazaar.ir/app/{Application.identifier}/?l=fa";
+        public int? UnconsumePurchaseCount => _orderTable?.Count;
 
-        public int UnconsumePurchaseCount => 0;
-
-        public bool HasValidation => true;
-
-        public EVendorType VendorType => EVendorType.Bazaar;
+        public bool HasValidation => false;
 
         public string MarketPackageName => "com.farsitel.bazaar";
 
-        public void Initialization(IServiceProvider serviceProvider)
+        public bool IsLoading => _productsNameTable == null;
+        public bool NotInitialize => _state == EStoreSetupState.None;
+        public bool Initialized => _state > EStoreSetupState.Initializing;
+        bool IMarketHandler.IsProductFetched => _state > EStoreSetupState.Initialized;
+        bool IMarketHandler.IsPurchasesFetched => _state > EStoreSetupState.FetchProducts;
+
+        IEnumerable<IProductItem> IMarketHandler.PurchaseItems => _productsNameTable.Values;
+
+        public IEnumerable<IPendingPurchaseItem> PendingPurchaseItems
         {
-            _vendorEventHandler = serviceProvider.GetService(typeof(IVendorEventHandler)) as IVendorEventHandler;
-            IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
-
-            VendorConfigurationObject resource = Resources.Load<VendorConfigurationObject>("BazaarVendorConfig");
-            if (resource == null)
-                return;
-            _productsTable = new Dictionary<string, VendorPurchaseItem>(resource.ItemCounts);
-            resource.FillItemDic(_productsTable);
-
-            IABEventManager.billingNotSupportedEvent += BazaarNotSupport;
-            IABEventManager.purchaseSucceededEvent += PurchaseSuccess;
-            IABEventManager.consumePurchaseFailedEvent += PurchaseFailed;
-            IABEventManager.consumePurchaseSucceededEvent += ConsumeSuccess;
-            IABEventManager.consumePurchaseFailedEvent += ConsumeFailed;
-            BazaarConfigData configData = Resources.Load<BazaarConfigData>(BazaarConfigData.RESOURCES_PATH);
-            BazaarIAB.init(configData.ApiKey);
+            get
+            {
+                foreach (var item in _orderTable)
+                {
+                    string id = item.Value.productId;
+                    yield return new PendingPurchaseData(_productsSkuTable[id], item.Key);
+                }
+            }
         }
 
-        public VendorPurchaseItem GetProductByName(string id)
+        public IEnumerable<IDelayPurchaseItem> DelayPurchaseItems => Array.Empty<IDelayPurchaseItem>();
+
+        public BazaarHandler(IVendorResourceLoader resourceLoader)
         {
-            return _productsTable[id];
+            resourceLoader.LoadAsync(Id, OnLoadDone);
+        }
+
+        public void StartLoading(IVendorResourceLoader resourceLoader)
+        {
+
+        }
+
+        public async void Initialization(IServiceProvider serviceProvider)
+        {
+            _vendorEventListener = serviceProvider.GetService(typeof(IVendorEventListener)) as IVendorEventListener;
+            IPaymentServer paymentServer = serviceProvider.GetService(typeof(IPaymentServer)) as IPaymentServer;
+            SecurityCheck securityCheck = SecurityCheck.Enable(_key);
+            PaymentConfiguration paymentConfiguration = new(securityCheck);
+            _storeController = new Payment(paymentConfiguration);
+            await TryConnecting();
+        }
+
+        private async Task<bool> TryConnecting()
+        {
+            if (_storeController == null)
+                return false;
+
+            try
+            {
+                SetState(EStoreSetupState.Initializing);
+                Result<bool> result = await _storeController.Connect();
+                if (result.status != Status.Success)
+                {
+                    SetState(EStoreSetupState.None);
+                    _vendorEventListener?.StoreInitializeFailed(Id, result.ToString());
+                    return false;
+                }
+                SetState(EStoreSetupState.Initialized);
+                _vendorEventListener?.StoreInitializeSuccess(Id);
+                if (_productsNameTable != null)
+                    RefreshProducts();
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                SetState(EStoreSetupState.None);
+                _vendorEventListener?.StoreInitializeFailed(Id, e.ToString());
+                return false;
+            }
+        }
+
+        private void OnLoadDone(IVendorConfigurationObject resource)
+        {
+            if (resource == null)
+            {
+                _productsNameTable = new();
+                _productsSkuTable = new();
+                throw new ArgumentNullException($"the resource for market id {Id} in null");
+            }
+            _key = resource.StoreKey;
+            _productsNameTable = new(resource.ItemCounts);
+            _productsSkuTable = new(resource.ItemCounts);
+            _subscriptionsTable = new();
+
+            foreach (IProductItem product in resource.Products)
+            {
+                _productsNameTable.Add(product.Name, product);
+                _productsSkuTable.Add(product.Id, product);
+            }
+
+            if (Initialized)
+                RefreshProducts();
+        }
+
+        public IProductItem GetProductByName(string id)
+        {
+            if (_productsNameTable.TryGetValue(id, out var item))
+            {
+                return item;
+            }
+            return default;
+        }
+
+        public IProductItem GetProductNameById(string productId)
+        {
+            foreach (var item in _productsNameTable.Values)
+            {
+                if (string.Compare(item.Id, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
+                    return item;
+            }
+            return default;
         }
 
         public void OpenPage()
@@ -78,39 +180,70 @@ using BazaarPlugin;
             }
         }
 
-        public void TryBuyProduct(string sku, string payload)
+        public async void TryBuyProduct(string sku, string payload)
         {
-            BazaarIAB.purchaseProduct(sku, payload);
+            IProductItem purchaseItem = GetProductNameById(sku);
+            if (_storeController == null)
+            {
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem, 0, "store not initializaed");
+                return;
+            }
+
+            if (NotInitialize)
+            {
+                bool isSuccess = await TryConnecting();
+                if (!isSuccess)
+                {
+                    return;
+                }
+            }
+
+            Result<PurchaseInfo> result = await _storeController.Purchase(sku, payload: payload);
+            if (result.status == Status.Success)
+            {
+                if (result.data.purchaseState == PurchaseInfo.State.Purchased)
+                {
+                    _orderTable.TryAdd(result.data.purchaseToken, result.data);
+                    _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
+                                    result.data.purchaseTime,
+                                    result.data.orderId, result.data.purchaseToken, EPurchaseOrigin.FreshPurchase);
+                }
+                else
+                {
+                    _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)result.data.purchaseState, result.message);
+                }
+            }
+            if (result.status == Status.Canceled)
+            {
+                _vendorEventListener.UserCancelPurchase(Id, purchaseItem, (int)result.data.purchaseState, result.message);
+            }
+            else if (result.status == Status.InstallBazaar)
+            {
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)result.status, result.message);
+            }
+            else
+            {
+                _vendorEventListener.PurchasedFailed(Id, purchaseItem, (int)result.status, result.message);
+            }
         }
 
         public void Dispose()
         {
-
-        }
-
-
-        public VendorPurchaseItem GetProductNameById(string productId)
-        {
-            foreach (var item in _productsTable.Values)
-            {
-                if (string.Compare(item.ProductId, productId) == 0 || string.Compare(item.OffProductId, productId) == 0)
-                    return item;
-            }
-            return default;
+            _storeController.Disconnect();
         }
 
         public void SetProdcutSalesOffState(string itemName, bool offState)
         {
-            if (_productsTable.ContainsKey(itemName))
+            if (_productsNameTable.ContainsKey(itemName))
             {
-                VendorPurchaseItem item = _productsTable[itemName];
+                var item = _productsNameTable[itemName];
                 item.SetOffState(offState);
             }
         }
 
         public void SetAllProdcutSalesOffState(bool state)
         {
-            foreach (var item in _productsTable.Values)
+            foreach (var item in _productsNameTable.Values)
             {
                 item.SetOffState(state);
             }
@@ -118,66 +251,135 @@ using BazaarPlugin;
 
         public void FetchUnconsumePurchases()
         {
-            return;
+            RefreshPurchases(string.Empty);
         }
 
-        public void ResolveLastUnconsumePurchase()
+        public async void RefreshPurchases(string sku)
         {
-            return;
-        }
+            if (_isFetchingPurchases)
+                return;
+            _isFetchingPurchases = true;
+            Result<List<PurchaseInfo>> result = await _storeController.GetPurchases();
+            _isFetchingPurchases = false;
+            if (result.status != Status.Success)
+                return;
+            _orderTable ??= new Dictionary<string, PurchaseInfo>();
+            _orderTable.Clear();
+            _subscriptionsTable.Clear();
+            foreach (var item in result.data)
+            {
+                if (_productsSkuTable.TryGetValue(item.productId, out IProductItem product))
+                {
+                    if (item.purchaseState == PurchaseInfo.State.Purchased && product.Type == EProductType.Consumable)
+                    {
+                        if (_orderTable.TryAdd(item.purchaseToken, item))
+                            _vendorEventListener.OnPendingPurchaseRecovered(Id, product, item.purchaseToken);
+                    }
+                    else if (item.purchaseState == PurchaseInfo.State.Purchased || item.purchaseState == PurchaseInfo.State.Consumed
+                        && product.Type == EProductType.Subscription)
+                    {
 
-        public void RefreshPruchases(string sku)
-        {
-            Debug.Log("RefreshPruchases");
-            //BazaarBilling.GetPurchases(
-            //(result) =>
-            //{
-            //    if (result?.Successful ?? false)
-            //    {
-            //        List<CafeBazaar.Billing.Purchase> purchases = result.Body;
-            //        if (purchases.Count > 0)
-            //        {
-            //            CafeBazaar.Billing.Purchase purchase = purchases[0];
-            //            _billingService.PurchasedSuccessful(GetProductById(purchase.ProductId), purchase.PurchaseTime.ToBinary(), purchase.PurchaseToken);
-            //        }
-            //    }
-            //    else
-            //    {
-            //        _billingService.PurchasedFailed(5000, result.Message);
-            //    }
-            //});
-        }
+                        SKUDetails details = ((BazaarProductMeta)product.ItemMeta).SKUDetail;
+                        if (details != null && details.subscriptionExpireDate > DateTime.UtcNow)
+                            _subscriptionsTable.Add(item.productId, details);
+                    }
+                }
+            }
 
-        private void PurchaseFailed(string message)
-        {
-            _vendorEventHandler.PurchasedFailed(0, message);
-            Debug.LogError("PurchaseFailed : " + message);
-        }
-
-        private void ConsumeFailed(string message)
-        {
-            _vendorEventHandler.ConsumeFailed("None", message);
-        }
-
-        private void ConsumeSuccess(BazaarPurchase purchase)
-        {
-            _vendorEventHandler.PurchasedSuccessful(GetProductNameById(purchase.ProductId), "IRR", ToDateFromBazaar(purchase.PurchaseTime).ToBinary(), purchase.PurchaseToken);
-        }
-
-        private void PurchaseSuccess(BazaarPurchase purchase)
-        {
-            BazaarIAB.consumeProduct(purchase.ProductId);
-        }
-
-        private void BazaarNotSupport(string message)
-        {
-            Debug.LogError(message);
-            _vendorEventHandler.StoreInitializeFailed();
+            SetState(EStoreSetupState.FetchPurchases);
+            _vendorEventListener.OnSubscriptionsUpdate(Id);
         }
 
         private static DateTime ToDateFromBazaar(long miliSeconds)
         {
             return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(miliSeconds).ToLocalTime();
+        }
+
+        private void SetState(EStoreSetupState state)
+        {
+            _state = state;
+            _vendorEventListener?.OnVendorStateChanged(Id, state);
+        }
+
+        public bool ConsumePurchase(string transactionId)
+        {
+            if (_storeController == null || _orderTable == null)
+                return false;
+            if (_orderTable.Remove(transactionId))
+            {
+                _ = _storeController.Consume(transactionId, result =>
+                {
+                    //if (result.status == Status.Success)
+                    //    _orderTable.Remove(transactionId);
+                });
+                return true;
+            }
+            return false;
+        }
+
+        public async void RefreshProducts()
+        {
+            if (_isFetchingProducts || _storeController == null)
+                return;
+            if (_state == EStoreSetupState.Initializing)
+                return;
+            if (_state == EStoreSetupState.None)
+            {
+                TryConnecting();
+                return;
+            }
+
+            var products = new string[_productsNameTable.Count];
+            int count = 0;
+            foreach (var item in _productsNameTable.Values)
+            {
+                products[count] = item.Id;
+                ++count;
+            }
+            _isFetchingProducts = true;
+            Result<List<SKUDetails>> result = await _storeController.GetSkuDetails(products);
+            _isFetchingProducts = false;
+            if (result.status != Status.Success)
+                return;
+            foreach (var item in result.data)
+            {
+                string sku = item.sku;
+                if (_productsSkuTable.TryGetValue(sku, out IProductItem product))
+                {
+                    if (float.TryParse(item.price, out var floatPrice))
+                        product.SetPrice(floatPrice);
+                    product.SetMetaData(new BazaarProductMeta(item, floatPrice));
+                }
+            }
+            SetState(EStoreSetupState.FetchProducts);
+            _vendorEventListener.OnProductItemsUpdate(Id);
+            RefreshPurchases(string.Empty);
+        }
+
+        public ISubscriptionInfo GetSubscriptionInfoByName(string productName)
+        {
+            if (_productsNameTable.TryGetValue(productName, out var item))
+            {
+                if (_subscriptionsTable.TryGetValue(item.Id, out SKUDetails info))
+                    return new SubscriptionData(info.subscriptionExpireDate);
+            }
+            return null;
+        }
+
+        public IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName)
+        {
+            return null;
+        }
+
+        void IMarketHandler.ResolvePendingPurchase(string transactionId)
+        {
+            if (_orderTable.TryGetValue(transactionId, out var order))
+            {
+                IProductItem purchaseItem = GetProductNameById(order.productId);
+                _vendorEventListener.PurchasedSuccessful(Id, purchaseItem, "IRR",
+                order.purchaseTime,
+                order.orderId, order.purchaseToken, EPurchaseOrigin.FreshPurchase);
+            }
         }
     }
 #endif

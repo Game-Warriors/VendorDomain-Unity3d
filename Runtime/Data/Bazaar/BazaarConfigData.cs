@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace GameWarriors.VendorDomian.Data
+namespace GameWarriors.VendorDomian.Data.Bazaar
 {
     [CreateAssetMenu(fileName = RESOURCES_PATH, menuName = "VendorDomain/Bazaar Config Data")]
     public class BazaarConfigData : ScriptableObject

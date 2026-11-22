@@ -1,5 +1,5 @@
 ﻿using System;
-using GameWarriors.VendorDomian.Data;
+using System.Collections.Generic;
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
@@ -7,24 +7,36 @@ namespace GameWarriors.VendorDomian.Abstraction
 
     public interface IMarketHandler
     {
-        public EVendorType VendorType { get; }
-        string MarketId { get; }
+        bool NotInitialize { get; }
+        bool Initialized { get; }
+        bool IsLoading { get; }
+        string Id { get; }
         string MarketPackageName { get; }
         string VendorLink { get; }
-        int UnconsumePurchaseCount { get; }
+        int? UnconsumePurchaseCount { get; }
         bool HasValidation { get; }
+        IEnumerable<IProductItem> PurchaseItems { get; }
+        IEnumerable<IPendingPurchaseItem> PendingPurchaseItems { get; }
+        IEnumerable<IDelayPurchaseItem> DelayPurchaseItems { get; }
+        bool IsProductFetched { get; }
+        bool IsPurchasesFetched { get; }
 
         void Initialization(IServiceProvider serviceProvider);
+        void StartLoading(IVendorResourceLoader resourceLoader);
         void OpenPage();
         void RateUs(Action<bool> rateDone);
         void FetchUnconsumePurchases();
-        void ResolveLastUnconsumePurchase();
+        bool ConsumePurchase(string transactionId);
         void TryBuyProduct(string sku, string payload);
-        void RefreshPruchases(string sku);
+        void RefreshProducts();
+        void RefreshPurchases(string sku);
         void Dispose();
-        VendorPurchaseItem GetProductByName(string id);
-        VendorPurchaseItem GetProductNameById(string productId);
+        IProductItem GetProductByName(string itemName);
+        IProductItem GetProductNameById(string productId);
+        ISubscriptionInfo GetSubscriptionInfoByName(string itemName);
+        IDelayPurchaseItem GetDelayPurchaseItemByName(string itemName);
         void SetProdcutSalesOffState(string itemName, bool offState);
         void SetAllProdcutSalesOffState(bool state);
+        void ResolvePendingPurchase(string transactionId);
     }
 }

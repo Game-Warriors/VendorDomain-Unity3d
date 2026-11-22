@@ -1,108 +1,205 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Abstraction;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
-using GameWarriors.VendorDomian.Abstraction;
-using GameWarriors.VendorDomian.Data;
 
 namespace GameWarriors.VendorDomian.Core
 {
-    public class VendorSystem : IVendorData, IVendor
+    public class VendorSystem : IDefaultVendorData, IVendor
     {
-        private readonly IMarketHandler _marketHandler;
-        private readonly IVendorEventHandler _vendorEventHandler;
+        private readonly Dictionary<string, IMarketHandler> _marketTable;
+        private IMarketHandler _defaultMarket;
         private readonly IServiceProvider _serviceProvider;
-        private string selectedId;
 
-        public EVendorType VendorId => _marketHandler?.VendorType ?? EVendorType.None;
+        public string MarketId => _defaultMarket?.Id;
+        public bool IsValidate => _defaultMarket.HasValidation;
 
-        int IVendorData.UnconsumePurchaseCount => _marketHandler?.UnconsumePurchaseCount ?? 0;
+        IEnumerable<IProductItem> IDefaultVendorData.PurchaseItems => _defaultMarket.PurchaseItems;
 
-        public string MarketId => _marketHandler?.MarketId;
+        IEnumerable<IDelayPurchaseItem> IDefaultVendorData.DelayPurchaseItems => _defaultMarket.DelayPurchaseItems;
 
-        public bool IsValidate => _marketHandler.HasValidation;
+        public bool IsInitialized => _defaultMarket.Initialized;
+
+        public bool IsProductFetched => _defaultMarket.IsProductFetched;
+
+        public bool IsPurchasesFetched => _defaultMarket.IsPurchasesFetched;
+
+        int? IDefaultVendorData.UnconsumePurchaseCount => _defaultMarket?.UnconsumePurchaseCount;
+
+        IEnumerable<IPendingPurchaseItem> IDefaultVendorData.PendingPurchaseItems => _defaultMarket.PendingPurchaseItems;
 
         [UnityEngine.Scripting.Preserve]
-        public VendorSystem(IServiceProvider serviceProvider, IMarketHandler marketHandler, IVendorEventHandler vendorEventHandler)
+        public VendorSystem(IServiceProvider serviceProvider, IMarketGroup marketGroup)
         {
-            _marketHandler = marketHandler;
-            _vendorEventHandler = vendorEventHandler;
+            if (marketGroup == null)
+                throw new ArgumentNullException("the market group is null");
+
+            _marketTable = new Dictionary<string, IMarketHandler>(2);
+            foreach (var market in marketGroup.Markets)
+            {
+                if (market.Id == marketGroup.InitialDefaultMarketId)
+                    _defaultMarket = market;
+                _marketTable.Add(market.Id, market);
+            }
+            if (_defaultMarket == null)
+            {
+                foreach (var market in marketGroup.Markets)
+                {
+                    _defaultMarket = market;
+                    break;
+                }
+            }
             _serviceProvider = serviceProvider;
         }
 
         [UnityEngine.Scripting.Preserve]
-        public Task WaitForLoading()
+        public async Task WaitForLoading()
         {
-            _marketHandler.Initialization(_serviceProvider);
-            return Task.CompletedTask;
+            IVendorResourceLoader resourceLoader = _serviceProvider.GetService(typeof(IVendorResourceLoader)) as IVendorResourceLoader;
+            foreach (var item in _marketTable.Values)
+            {
+                item.StartLoading(resourceLoader);
+            }
+
+            while (true)
+            {
+                bool anyLoading = false;
+                foreach (var item in _marketTable.Values)
+                {
+                    if (item.IsLoading)
+                    {
+                        anyLoading = true;
+                        break;
+                    }
+                }
+
+                if (!anyLoading)
+                    break;
+                await Task.Delay(100);
+            }
+        }
+
+        [UnityEngine.Scripting.Preserve]
+        public IEnumerator WaitForLoadingCoroutine()
+        {
+            IVendorResourceLoader resourceLoader = _serviceProvider.GetService(typeof(IVendorResourceLoader)) as IVendorResourceLoader;
+            foreach (var item in _marketTable.Values)
+            {
+                item.StartLoading(resourceLoader);
+            }
+
+            while (true)
+            {
+                bool anyLoading = false;
+                foreach (var item in _marketTable.Values)
+                {
+                    if (item.IsLoading)
+                    {
+                        anyLoading = true;
+                        break;
+                    }
+                }
+
+                if (!anyLoading)
+                    yield break;
+
+                yield return null;
+            }
+        }
+
+        [UnityEngine.Scripting.Preserve]
+        public void Initialization()
+        {
+            foreach (var item in _marketTable.Values)
+            {
+                item.Initialization(_serviceProvider);
+            }
+        }
+
+        void IVendor.ChangeDefaultMarket(string newDefault)
+        {
+            foreach (var market in _marketTable.Values)
+            {
+                if (string.Equals(market.Id, newDefault, StringComparison.OrdinalIgnoreCase))
+                    _defaultMarket = market;
+                return;
+            }
+            throw new KeyNotFoundException($"the request {newDefault} market not exist");
         }
 
         void IVendor.PurchaseProduct(string packName, bool hasOff)
         {
-            selectedId = packName;
-            VendorPurchaseItem product = _marketHandler.GetProductByName(selectedId);
-            //Debug.Log("try to buy pack id :" + packName);
-            //Debug.Log("try to buy product id :" + product.ProductId);
-            if (product.Type == ProductType.Consumable)
-            {
-                string productId = hasOff && product.HasOff ? product.OffProductId : product.ProductId;
-                //Debug.Log("try to buy product id :" + productId);
-                _marketHandler.TryBuyProduct(productId, Guid.NewGuid().ToString());
-            }
-            else
-                _vendorEventHandler.PurchasedFailed(0, "Product is not consumable");
+            IProductItem product = _defaultMarket.GetProductByName(packName);
+            string productId = hasOff && product.HasOff ? product.OffProductId : product.Id;
+            _defaultMarket.TryBuyProduct(productId, Guid.NewGuid().ToString());
         }
 
         void IVendor.OpenVendorLocation()
         {
-            _marketHandler.OpenPage();
+            _defaultMarket.OpenPage();
         }
 
         void IVendor.OpenRate(Action<bool> onDone)
         {
-            _marketHandler.RateUs(onDone);
+            _defaultMarket.RateUs(onDone);
         }
 
-        void IVendor.CheckUnconsumePurchase()
+        void IVendor.FetchUnconsumePurchase()
         {
             if (Application.internetReachability == NetworkReachability.NotReachable)
                 return;
-            _marketHandler.FetchUnconsumePurchases();
+            _defaultMarket.FetchUnconsumePurchases();
         }
 
-        (float, VendorCurrencyItem[]) IVendorData.GetProducePriceAndData(string key)
+
+        void IVendor.RefreshProducts()
         {
-            var item = _marketHandler.GetProductByName(key);
+            _defaultMarket?.RefreshProducts();
+        }
+
+        (float, IEnumerable<IProductCurrencyItem>) IDefaultVendorData.GetProducePriceAndData(string key)
+        {
+            var item = _defaultMarket.GetProductByName(key);
             return (item.Price, item.CurrenciesData);
         }
 
-        VendorCurrencyItem[] IVendorData.GetCurrencyByPurchaseId(string purchaseId)
+        IEnumerable<IProductCurrencyItem> IDefaultVendorData.GetCurrencyByPurchaseId(string purchaseId)
         {
-            var item = _marketHandler.GetProductNameById(purchaseId);
+            var item = _defaultMarket.GetProductNameById(purchaseId);
             return item.CurrenciesData;
         }
 
 
-        void IVendorData.EnableProductOffState(string itemName)
+        void IDefaultVendorData.EnableProductOffState(string itemName)
         {
-            _marketHandler.SetProdcutSalesOffState(itemName, true);
+            _defaultMarket.SetProdcutSalesOffState(itemName, true);
         }
 
-        void IVendorData.DisableAllProductOffState()
+        void IDefaultVendorData.DisableAllProductOffState()
         {
-            _marketHandler.SetAllProdcutSalesOffState(false);
+            _defaultMarket.SetAllProdcutSalesOffState(false);
         }
 
-        public void ResolveLastUnconsumePurchase()
+        ISubscriptionInfo IDefaultVendorData.GetSubscriptionInfo(string itemName)
         {
-            if (Application.internetReachability == NetworkReachability.NotReachable || _marketHandler == null)
-            {
-                //_purchaseHandler.OnItemNotPurchase();
-            }
-            else
-            {
-                _marketHandler?.ResolveLastUnconsumePurchase();
-            }
+            return _defaultMarket?.GetSubscriptionInfoByName(itemName);
+        }
+
+        IDelayPurchaseItem IDefaultVendorData.GetDelayPurchaseItem(string itemName)
+        {
+            return _defaultMarket?.GetDelayPurchaseItemByName(itemName);
+        }
+
+        public bool ConsumePurchase(string transactionId)
+        {
+            return _defaultMarket.ConsumePurchase(transactionId);
+        }
+
+        void IVendor.ResolveUnconsumePurchase(string transactionId)
+        {
+            _defaultMarket?.ResolvePendingPurchase(transactionId);
         }
     }
 }

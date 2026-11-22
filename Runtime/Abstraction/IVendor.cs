@@ -2,15 +2,20 @@
 
 namespace GameWarriors.VendorDomian.Abstraction
 {
-    public enum EVendorType { None, Bazaar, Google, Apple, Myket, Windows }
 
     public interface IVendor
     {
+        bool IsInitialized { get; }
+        bool IsProductFetched { get; }
+        bool IsPurchasesFetched { get; }
 
+        void ChangeDefaultMarket(string newDefault);
         void PurchaseProduct(string packName, bool hasOff);
+        bool ConsumePurchase(string transactionId);
         void OpenVendorLocation();
         void OpenRate(Action<bool> onDone);
-        void CheckUnconsumePurchase();
-        void ResolveLastUnconsumePurchase();
+        void RefreshProducts();
+        void FetchUnconsumePurchase();
+        void ResolveUnconsumePurchase(string transactionId);
     }
 }

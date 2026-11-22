@@ -1,10 +1,11 @@
-﻿using System;
+﻿using GameWarriors.VendorDomian.Abstraction;
+using System;
 using UnityEngine;
 
 namespace GameWarriors.VendorDomian.Data
 {
     [Serializable]
-    public class VendorCurrencyItem
+    public class VendorCurrencyItem : IProductCurrencyItem
     {
         [SerializeField]
         private string _currnecyId;
